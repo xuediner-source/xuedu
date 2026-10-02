@@ -4,6 +4,8 @@
 
 历史灰测和内测包不再作为独立发布渠道。规范下载路由为 `/download/app-test.apk`；旧 `/download/app-gray.apk` 和 `/download/app-latest.apk` 仅重定向至规范路由。演示账号、虚构数据分支、体验问卷及灰测管理接口已移除；旧演示会话升级时失效，学校教务账号正常使用。
 
+本版已于 2026-10-02 [发布](https://github.com/xuediner-source/xuedu/releases/tag/v0.0.1)。[最终构建](https://github.com/xuediner-source/xuedu/actions/runs/36954787027)成功，包内版本名为 0.0.1、版本代码为 251，沿用同一测试签名。公开 APK 下载及 SHA-256 校验通过，`main` 分支后端发布元数据已启用。
+
 ## 构建与发布
 
 推送 `main` 上的代码改动或手动运行 `Build unified test APK` 会执行前后端测试，生成已签名 APK，并上传 `xuedu-test-apk` workflow artifact。artifact 中包含安装包、SHA-256、签名校验结果及包内版本信息。发布前需确认 workflow 成功，包内版本名、版本代码和 Release 标签一致。

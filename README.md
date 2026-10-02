@@ -4,7 +4,7 @@
 
 所有历史内测、灰测安装包统一到测试版 `0.0.1`。后续安装包发布到本仓库的 [Releases](https://github.com/xuediner-source/xuedu/releases)，不再单独发布灰测包。Android 包名保持 `com.cqjtu.app`，本次版本代码为 `251`。
 
-测试版 0.0.1 已移除演示账号和体验问卷，使用学校教务账号登录。更新安装包正在重新构建，完成后更新本仓库 [Release](https://github.com/xuediner-source/xuedu/releases/tag/v0.0.1) 的同名 APK。
+2026-10-02 已发布 [测试版 0.0.1](https://github.com/xuediner-source/xuedu/releases/tag/v0.0.1)：[下载 Android APK](https://github.com/xuediner-source/xuedu/releases/download/v0.0.1/xuedu-test-0.0.1.apk)。本版已移除演示账号和体验问卷，使用学校教务账号登录。签名构建通过，公开下载的校验值与构建产物一致。
 
 本版改动包括不保存教务密码、服务端注销会话、账号与学期缓存隔离、课表后台同步、准确解析单周与离散周、考试时间状态修复、自定义日程编辑与删除、五日/七日课表，以及课程冲突分栏。详细记录见 [优化记录](CHANGES-20261002.md)。
 
