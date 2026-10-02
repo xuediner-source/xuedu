@@ -1,0 +1,178 @@
+/* ========================================================
+   学渡 · Widget Overlay 展开基建 (widget.css)
+   供 WidgetExpandHost.vue 与 useWidgetExpand.js 支撑卡片展开/收起
+   Apple HIG v4 实色纯白体系，杜绝旧 terminal 视觉与玻璃渐变
+   ======================================================== */
+
+.widget-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1800;
+  background: rgba(0, 0, 0, 0.38);
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 1;
+  transition: none;
+}
+.widget-backdrop.show {
+  visibility: visible;
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* 展开动画层 1：widget-frame 做合成层几何过渡 */
+.widget-frame {
+  position: fixed;
+  z-index: 1808;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  transform-origin: 0 0;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  background-color: var(--bg-app);
+  will-change: transform;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.14);
+}
+
+.widget-frame.is-settled {
+  transform: translateZ(0) !important;
+  border-radius: 0 !important;
+  box-shadow: none;
+  will-change: auto;
+}
+
+/* 展开动画层 2：widget-overlay 实际内容承载 */
+.widget-overlay {
+  position: fixed;
+  z-index: 1812;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-app);
+  transform-origin: 50% 50%;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  contain: none;
+  will-change: auto;
+}
+
+/* 动画未 settled 前，内部内容不可见且不拦点击 */
+.widget-overlay:not(.is-settled) {
+  pointer-events: none;
+  visibility: hidden !important;
+  overflow: hidden !important;
+}
+.widget-overlay:not(.is-settled) * {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+.widget-overlay.is-settled {
+  transform: translateZ(0) !important;
+  contain: none;
+  will-change: auto;
+  background-color: var(--bg-app);
+}
+
+/* 内容滚动包装器 */
+.widget-overlay-inner {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 展开页没有 dock：内嵌页面 padding-bottom 为 16px */
+.widget-overlay-inner > .page-container {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 100%;
+  padding-bottom: 16px;
+}
+
+/* 助手页定高 100%，输入底栏撑满 */
+.widget-overlay-inner > .assistant-page {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding-bottom: calc(12px + var(--safe-bottom));
+}
+
+.widget-overlay-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 源卡片残影 */
+.widget-ghost-layer {
+  position: fixed;
+  z-index: 1805;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.widget-card-ghost {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.widget-card-ghost.is-fading {
+  visibility: hidden;
+  opacity: 1;
+}
+
+.widget-card-ghost > * {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+.widget-source-hidden {
+  visibility: hidden !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+}
+
+/* 页面状态类 */
+html.widget-overlay-open {
+  overflow: hidden;
+}
+
+html.widget-overlay-open .floating-dock-wrap {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html.widget-animating .app-content {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .widget-frame,
+  .widget-overlay,
+  .widget-card-ghost {
+    transition: none !important;
+    animation: none !important;
+  }
+}

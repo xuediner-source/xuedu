@@ -1,0 +1,82 @@
+name: Build unified test APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile-app/**'
+      - 'backend/**'
+      - '.github/workflows/android-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-test-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APP_CHANNEL: test
+      ANDROID_VERSION_CODE: '250'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            mobile-app/package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install and test backend
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Install and test app
+        working-directory: mobile-app
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+      - name: Build signed test APK
+        working-directory: mobile-app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/xuedu-test.keystore"
+          trap 'rm -f "$ANDROID_KEYSTORE_PATH"' EXIT
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+          chmod +x android/gradlew
+          npm run build:android:release
+          REQUIRE_ANDROID_ASSETS=1 npm test
+          version="$(node -p "JSON.parse(require('fs').readFileSync('package.json')).version")"
+          mkdir -p release-output
+          cp android/app/build/outputs/apk/release/app-release.apk "release-output/xuedu-test-$version.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "release-output/xuedu-test-$version.apk" > release-output/signature.txt
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "release-output/xuedu-test-$version.apk" > release-output/apk-info.txt
+          grep -F "versionName='$version'" release-output/apk-info.txt
+          grep -F "versionCode='$ANDROID_VERSION_CODE'" release-output/apk-info.txt
+          cd release-output
+          sha256sum "xuedu-test-$version.apk" > SHA256SUMS.txt
+      - name: Upload verified install package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xuedu-test-apk
+          path: mobile-app/release-output/
+          if-no-files-found: error
+          retention-days: 30

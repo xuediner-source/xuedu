@@ -1,0 +1,52 @@
+<view class="schedule-container">
+  <view class="schedule-header">
+    <view class="header-left">
+      <text class="student-name">{{studentName}}</text>
+      <text wx:if="{{semesterText}}" class="semester-info">{{semesterText}}</text>
+      <text class="week-info">{{currentWeekLabel}}</text>
+      <text wx:if="{{offline}}" class="offline-info">离线缓存课表</text>
+      <text wx:if="{{offline && offlineMessage}}" class="offline-info">{{offlineMessage}}</text>
+    </view>
+    <view class="header-right">
+      <button class="refresh-btn" bindtap="onRefresh" size="mini">刷新</button>
+      <button class="logout-btn" bindtap="onLogout" size="mini">退出</button>
+    </view>
+  </view>
+
+  <view class="week-selector">
+    <button class="week-nav" bindtap="onPrevWeek">‹</button>
+    <text class="week-text">第 {{displayWeek}} 周</text>
+    <button class="week-nav" bindtap="onNextWeek">›</button>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading">加载中...</view>
+  <view wx:elif="{{errorMsg}}" class="error-msg">{{errorMsg}}</view>
+
+  <scroll-view wx:else class="schedule-grid" scroll-y>
+    <view class="schedule-table">
+      <view class="table-row table-header">
+        <view class="table-cell time-cell">节次</view>
+        <view class="table-cell" wx:for="{{weekdays}}" wx:key="index">{{item}}</view>
+      </view>
+
+      <view class="table-row" wx:for="{{periods}}" wx:for-index="periodIndex" wx:key="periodIndex">
+        <view class="table-cell time-cell">
+          <text>{{periodNames[periodIndex]}}</text>
+          <text class="period-time">{{item}}</text>
+        </view>
+        <view class="table-cell" wx:for="{{weekdays}}" wx:for-index="dayIndex" wx:key="dayIndex">
+          <view class="lesson-item" wx:for="{{getCoursesForCell(dayIndex, periodIndex)}}" wx:for-index="ci" wx:key="ci"
+                style="background: {{item.color}}; opacity: {{item.active ? 1 : 0.4}};"
+                bindtap="showCourseDetail" data-course="{{item.name}}">
+            <text class="lesson-name">{{item.name}}</text>
+            <text class="lesson-teacher" wx:if="{{item.teacher}}">{{item.teacher}}</text>
+            <text class="lesson-location" wx:if="{{item.room}}">{{item.room}}</text>
+            <text class="lesson-weeks" wx:if="{{item.weeks}}">第{{item.weeks}}周</text>
+            <text class="lesson-weektype" wx:if="{{item.weekType === 'even'}}">双周</text>
+            <text class="lesson-weektype" wx:elif="{{item.weekType === 'odd'}}">单周</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>

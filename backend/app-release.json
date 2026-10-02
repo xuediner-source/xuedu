@@ -1,0 +1,8 @@
+{
+  "version": "0.0.1",
+  "versionCode": 250,
+  "channel": "test",
+  "published": false,
+  "downloadUrl": "https://github.com/xuediner-source/xuedu/releases/download/v0.0.1/xuedu-test-0.0.1.apk",
+  "releaseNotes": "测试版 0.0.1"
+}

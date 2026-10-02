@@ -1,0 +1,5 @@
+{
+  "key": "把学院申请到的 API Key 填在这里",
+  "base": "https://chat.cqjtu.edu.cn/ds/api/v1",
+  "model": "DeepseekV4f"
+}

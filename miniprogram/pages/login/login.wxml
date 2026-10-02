@@ -1,0 +1,34 @@
+<view class="login-container">
+  <view class="login-header">
+    <image class="logo" src="/images/logo.png" mode="aspectFit"></image>
+    <text class="title">重庆交通大学</text>
+    <text class="subtitle">教务助手</text>
+  </view>
+
+  <view class="login-form">
+    <view class="input-group">
+      <text class="input-label">学号</text>
+      <input class="input-field" type="text" placeholder="请输入学号" value="{{username}}" bindinput="onUsernameInput" />
+    </view>
+
+    <view class="input-group">
+      <text class="input-label">密码</text>
+      <input class="input-field" type="password" placeholder="请输入密码" value="{{password}}" bindinput="onPasswordInput" />
+    </view>
+
+    <view class="login-tip">
+      <text class="tip-text">提示：使用教务处统一身份认证账号密码登录</text>
+    </view>
+
+    <view wx:if="{{errorMsg}}" class="error-msg">{{errorMsg}}</view>
+
+    <button class="login-btn" bindtap="onLogin" loading="{{loading}}" disabled="{{loading}}">
+      <text wx:if="{{!loading}}">登 录</text>
+      <text wx:else>登录中...</text>
+    </button>
+  </view>
+
+  <view class="login-footer">
+    <text class="footer-text">数据来源于重庆交通大学教务处</text>
+  </view>
+</view>
