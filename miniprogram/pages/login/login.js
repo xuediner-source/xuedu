@@ -38,7 +38,7 @@ Page({
 
     try {
       const result = await api.login(username.trim(), password);
-      if (result.sessionPersistent === false && !result.demo) {
+      if (result.sessionPersistent === false) {
         wx.showModal({
           title: '登录成功',
           content: result.persistenceMessage || '当前会话只保存在服务器内存中，服务器重启后需要重新登录。',

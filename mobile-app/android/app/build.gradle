@@ -2,7 +2,7 @@ apply plugin: 'com.android.application'
 
 def packageVersion = new groovy.json.JsonSlurper().parse(file('../../package.json')).version
 def configuredVersionName = project.findProperty('appVersionName') ?: System.getenv('APP_VERSION') ?: System.getenv('VITE_APP_VERSION') ?: packageVersion
-def configuredVersionCode = project.findProperty('appVersionCode') ?: System.getenv('ANDROID_VERSION_CODE') ?: '250'
+def configuredVersionCode = project.findProperty('appVersionCode') ?: System.getenv('ANDROID_VERSION_CODE') ?: '251'
 def releaseStoreFile = System.getenv('ANDROID_KEYSTORE_PATH')
 def releaseStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
 def releaseKeyAlias = System.getenv('ANDROID_KEY_ALIAS')

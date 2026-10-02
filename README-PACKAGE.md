@@ -1,6 +1,6 @@
 # 学渡 · 统一测试版 0.0.1
 
-当前项目保留已通过验收的业务修改，安装包发布统一为测试版 `0.0.1`（Android versionCode `250`）。历史内测/灰测 APK 仅作为本机备份，不再作为独立发布渠道。
+当前项目保留已通过验收的业务修改，安装包发布统一为测试版 `0.0.1`（Android versionCode `251`）。历史内测/灰测 APK 仅作为本机备份，不再作为独立发布渠道。
 
 主项目说明见 [README.md](README.md)，版本改动见 [CHANGES-20261002.md](CHANGES-20261002.md)，发布与签名流程见 [TEST-RELEASE.md](TEST-RELEASE.md)，服务端配置见 [deploy/README.md](deploy/README.md)。
 

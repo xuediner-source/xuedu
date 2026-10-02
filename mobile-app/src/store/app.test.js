@@ -246,14 +246,51 @@ test('offline semester switching uses only the selected term’s own successful 
   assert.match(store.scheduleError, /已保留/)
 })
 
-test('demo account has the same legacy-cache ownership checks as real accounts', () => {
+test('retired demo sessions cannot hydrate fictional data and preserve only personal custom items', () => {
   localStorage.setItem('loginUser', 'xuedu_demo')
-  localStorage.setItem('studentId', 'alice')
+  localStorage.setItem('studentId', 'xuedu_demo')
   localStorage.setItem('sessionId', 'demo-token')
-  localStorage.setItem('cachedCourses', JSON.stringify([{ name: 'Alice旧课表' }]))
+  localStorage.setItem('isDemo', '1')
+  localStorage.setItem('cachedCourses', JSON.stringify([{ name: '虚构课表' }]))
+  localStorage.setItem('customCourses', JSON.stringify([{ name: '自己的日程' }]))
+  writeAccountCache('alice', 'grades', [{ name: '真实账号缓存' }])
   const store = useAppStore()
+  assert.equal(store.isLoggedIn, false)
   assert.deepEqual(store.courses, [])
+  assert.deepEqual(store.customCourses, [])
+  assert.equal(localStorage.getItem('sessionId'), null)
+  assert.equal(localStorage.getItem('isDemo'), null)
   assert.equal(localStorage.getItem('cachedCourses'), null)
+  assert.equal(localStorage.getItem(accountKey('xuedu_demo', 'schedule', '')), null)
+  assert.ok(localStorage.getItem(accountKey('xuedu_demo', 'custom')))
+  assert.ok(localStorage.getItem(accountKey('alice', 'grades')))
+})
+
+test('retired demo login is rejected and legacy-server demo sessions are revoked', async () => {
+  const requests = []
+  apiClient.defaults.adapter = async config => {
+    requests.push(config)
+    return reply(config, config.url === '/login'
+      ? { success: true, demo: true, sessionId: 'legacy-demo-token' }
+      : { success: true })
+  }
+  const store = useAppStore()
+  assert.equal(await store.login('xuedu_demo', 'unused'), false)
+  assert.equal(requests.length, 0)
+  assert.equal(await store.login('legacy-custom-demo', 'unused'), false)
+  assert.equal(store.isLoggedIn, false)
+  assert.match(store.authError, /测试账号已停用/)
+  assert.equal(requests.find(config => config.url === '/logout').headers.get('X-Session-Id'), 'legacy-demo-token')
+})
+
+test('restoring a legacy-server demo session signs out instead of accepting it', async () => {
+  const store = setupSession('legacy-custom-demo')
+  apiClient.defaults.adapter = async config => reply(config, config.url === '/session'
+    ? { success: true, demo: true }
+    : { success: true })
+  assert.equal(await store.restoreSession(), false)
+  assert.equal(store.isLoggedIn, false)
+  assert.match(store.authError, /测试账号已停用/)
 })
 
 test('a single-date custom agenda remains usable when the teaching-week start is unknown', () => {

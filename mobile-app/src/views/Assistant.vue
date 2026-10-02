@@ -457,10 +457,6 @@ async function refreshStatus() {
   try {
     const { data: json } = await apiClient.get('/assistant/status', { headers: { 'X-Session-Id': store.sessionId }, timeout: 15000 })
     serverKey.value = !!json.serverKey
-    if (json.grayClosed) {
-      errorText.value = json.message || '演示体验已关闭'
-      serverKey.value = false
-    }
   } catch {}
 }
 

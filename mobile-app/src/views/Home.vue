@@ -201,23 +201,6 @@
           <span class="chevron-right-mark" aria-hidden="true">›</span>
         </div>
 
-        <div
-          v-if="store.isDemo"
-          class="inset-list-row"
-          role="button"
-          tabindex="0"
-          @click="goPlain('/survey')"
-          @keydown.enter.self.prevent="goPlain('/survey')"
-          @keydown.space.self.prevent="goPlain('/survey')"
-        >
-          <div class="inset-row-left">
-            <div class="inset-row-icon icon-orange">
-              <Icon name="schedule" :size="16" color="#ffffff" />
-            </div>
-            <span class="inset-row-title">演示体验问卷</span>
-          </div>
-          <span class="chevron-right-mark" aria-hidden="true">›</span>
-        </div>
       </div>
     </section>
 

@@ -98,15 +98,15 @@ test("logout removes an encrypted session immediately from memory and disk", asy
   assert.deepEqual(decryptSessionDump(after, parseEncryptionKey(encryptionKey)), []);
 });
 
-test("unconfigured gray management is unavailable", async () => {
-  const response = await nativeFetch(`${baseUrl}/api/gray/control`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ enabled: true }),
-  });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json()).message, "演示管理未配置");
-  assert.equal((await (await nativeFetch(`${baseUrl}/api/gray/status`)).json()).enabled, false);
+test("retired survey and demo-management APIs are absent and create no survey data", async () => {
+  for (const [route, method] of [["/api/gray/control", "POST"], ["/api/gray/status", "GET"], ["/api/survey", "POST"]]) {
+    const response = await nativeFetch(`${baseUrl}${route}`, {
+      method,
+      ...(method === "POST" ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: true, score: 5 }) } : {}),
+    });
+    assert.equal(response.status, 404);
+  }
+  assert.equal(fs.existsSync(path.join(dataDir, "surveys.jsonl")), false);
 });
 
 test("test release metadata gates updates and compatibility links redirect to the canonical route", async () => {

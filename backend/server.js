@@ -33,45 +33,8 @@ const SESSION_ENCRYPTION_KEY = parseEncryptionKey(process.env.SESSION_ENCRYPTION
 const sessions = new Map();
 const DATA_DIR = process.env.DATA_DIR || (process.platform === "win32" ? "F:\\DPH\\cqjtu-weapp\\backend\\data" : "/opt/cqjtu/backend/data");
 const SESSION_FILE = path.join(DATA_DIR, "sessions.json");
-const SURVEY_FILE = path.join(DATA_DIR, "surveys.jsonl");
-const demoData = require("./demo-data");
-const DEMO_USER = String(process.env.DEMO_USER || "xuedu_demo").trim();
-const DEMO_PASS = String(process.env.DEMO_PASS || "xuedu2026").trim();
-const ENV_GRAY_ENABLED = (process.env.DEMO_ENABLED ?? process.env.GRAY_ENABLED) === "1";
-const GRAY_ADMIN_TOKEN = String(process.env.GRAY_ADMIN_TOKEN || "");
-const GRAY_ADMIN_IPS = new Set(String(process.env.GRAY_ADMIN_IPS || "").split(",").map((ip) => ip.trim()).filter(Boolean));
 const allowLoginAttempt = createLoginLimiter();
 let persistTimer = null;
-let grayDisabledAtRuntime = false;
-
-function isGrayEnabled() {
-  return ENV_GRAY_ENABLED && !grayDisabledAtRuntime;
-}
-
-function normalizeIp(ip) {
-  const value = String(ip || "").trim().replace(/^::ffff:/i, "");
-  return value === "::1" ? "127.0.0.1" : value;
-}
-
-function isGrayAdminReady() {
-  return !!GRAY_ADMIN_TOKEN && GRAY_ADMIN_IPS.size > 0;
-}
-
-function safeTokenEquals(expected, actual) {
-  const left = Buffer.from(String(expected || ""));
-  const right = Buffer.from(String(actual || ""));
-  return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right);
-}
-
-function hasGrayAdminAccess(req) {
-  return isGrayAdminReady()
-    && GRAY_ADMIN_IPS.has(normalizeIp(req.ip || req.socket.remoteAddress))
-    && safeTokenEquals(GRAY_ADMIN_TOKEN, (req.body && req.body.token) || req.headers["x-gray-token"]);
-}
-
-function grayClosedPayload() {
-  return { success: false, grayClosed: true, message: "演示功能已关闭" };
-}
 
 function sendUpstreamFailure(res, error, fallback) {
   console.error("Upstream operation failed:", error && (error.code || error.name || "error"));
@@ -141,7 +104,7 @@ function loadSessions() {
     const now = Date.now();
     let discarded = false;
     for (const item of dump || []) {
-      if (!item || !item.id || !item.jar) {
+      if (!item || !item.id || !item.jar || item.demo || item.username === "xuedu_demo") {
         discarded = true;
         continue;
       }
@@ -167,12 +130,8 @@ function loadSessions() {
 }
 
 function rememberSession(sessionId, cm, extra = {}) {
-  sessions.set(sessionId, { cm, createdAt: Date.now(), username: extra.username || "", studentName: extra.studentName || "", demo: !!extra.demo });
+  sessions.set(sessionId, { cm, createdAt: Date.now(), username: extra.username || "", studentName: extra.studentName || "" });
   persistSessions();
-}
-
-function isDemoSession(rec) {
-  return !!(rec && rec.demo);
 }
 
 function deleteSession(sessionId) {
@@ -188,7 +147,7 @@ function expireSession(sessionId) {
 function getSession(sessionId) {
   const rec = sessions.get(sessionId);
   if (!rec) return null;
-  if (Date.now() - rec.createdAt > SESSION_TTL_MS) {
+  if (rec.demo || rec.username === "xuedu_demo" || Date.now() - rec.createdAt > SESSION_TTL_MS) {
     deleteSession(sessionId);
     return null;
   }
@@ -617,20 +576,8 @@ app.post("/api/login", async (req, res) => {
       return res.status(429).json({ success: false, message: "登录请求过于频繁，请 15 分钟后重试" });
     }
 
-    if (String(username).trim() === DEMO_USER && String(password) === DEMO_PASS) {
-      if (!isGrayEnabled()) return res.json(grayClosedPayload());
-      const sessionId = crypto.randomBytes(16).toString("hex");
-      const dummy = { jar: { serializeSync() { return {}; } } };
-      rememberSession(sessionId, dummy, { username: DEMO_USER, studentName: demoData.profile.studentName, demo: true });
-      return res.json({
-        success: true,
-        message: "已进入学渡演示账号",
-        sessionId,
-        studentName: demoData.profile.studentName,
-        studentId: DEMO_USER,
-        demo: true,
-        sessionPersistent: false,
-      });
+    if (String(username).trim() === "xuedu_demo") {
+      return res.json({ success: false, message: "测试账号已停用，请使用学校教务账号登录" });
     }
 
     const cm = new CookieManager();
@@ -711,10 +658,6 @@ app.get("/api/schedule", async (req, res) => {
     const rec = getSession(sessionId);
     if (!rec) {
       return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    }
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      return res.json(demoData.schedulePayload(currentWeekOf("2026-09-07")));
     }
 
     const cm = rec.cm;
@@ -891,10 +834,6 @@ app.get("/api/grades", async (req, res) => {
     if (!rec) {
       return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
     }
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      return res.json(demoData.gradesPayload());
-    }
 
     const cm = rec.cm;
 
@@ -992,10 +931,6 @@ app.get("/api/exams", async (req, res) => {
     if (!rec) {
       return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
     }
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      return res.json(demoData.examsPayload());
-    }
 
     const cm = rec.cm;
 
@@ -1057,8 +992,7 @@ app.get("/api/session", (req, res) => {
     success: true,
     studentName: rec.studentName || "",
     studentId: rec.username || "",
-    demo: isDemoSession(rec),
-    sessionPersistent: !isDemoSession(rec) && !!SESSION_ENCRYPTION_KEY,
+    sessionPersistent: !!SESSION_ENCRYPTION_KEY,
   });
 });
 // Student Profile endpoint (from live /jsxsd/grxx/xsxx)
@@ -1067,10 +1001,6 @@ app.get("/api/profile", async (req, res) => {
     const sessionId = req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);
     if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      return res.json(demoData.profilePayload());
-    }
     const cm = rec.cm;
 
     const got = await eduFetch(cm, "/jsxsd/grxx/xsxx", { headers: { Referer: SERVICE_URL } });
@@ -1137,10 +1067,6 @@ app.get("/api/program", async (req, res) => {
     const sessionId = req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);
     if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      return res.json(demoData.programPayload());
-    }
     const cm = rec.cm;
 
     const got = await eduFetch(cm, "/jsxsd/pyfa/pyfa_query", { headers: { Referer: SERVICE_URL } });
@@ -1439,13 +1365,6 @@ app.get("/api/classrooms", async (req, res) => {
     const sessionId = req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);
     if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    if (isDemoSession(rec)) {
-      if (!isGrayEnabled()) return res.json({ success: false, sessionExpired: true, grayClosed: true, message: "演示功能已关闭" });
-      if (String(req.query.query || "") !== "1") {
-        return res.json({ success: true, rooms: [], queried: false, filters: {} });
-      }
-      return res.json(demoData.classroomsPayload(req.query));
-    }
     const cm = rec.cm;
 
     const weekdayMap = { "星期一": "1", "星期二": "2", "星期三": "3", "星期四": "4", "星期五": "5", "星期六": "6", "星期日": "7", "周一": "1", "周二": "2", "周三": "3", "周四": "4", "周五": "5", "周六": "6", "周日": "7" };
@@ -1539,7 +1458,6 @@ app.get("/api/classrooms/debug", async (req, res) => {
     const sessionId = req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);
     if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    if (isDemoSession(rec)) return res.json({ success: false, message: "演示账号无法访问教务系统" });
     const cm = rec.cm;
     const xq = classroomWeekdayToNum(req.query.weekday || "1");
     const zc = String(req.query.week || "1");
@@ -1934,9 +1852,8 @@ function formatAssistantContext(raw) {
 
 function buildAssistantSystemPrompt(rec, liveContext) {
   const who = rec && rec.studentName ? "当前学生：" + rec.studentName + "。" : "";
-  const demo = rec && isDemoSession(rec) ? "当前是演示账号，课表成绩考试均为虚构演示数据。" : "";
   return [
-    "你是学渡助手，服务重庆交通大学学生。" + who + demo,
+    "你是学渡助手，服务重庆交通大学学生。" + who,
     "回答要求：用简洁中文，直接给结论和具体数据（课程名、教室号、时间、成绩、绩点、学分等），不要输出思考过程。",
     "下面【实时数据】是刚刚从严教务系统和学渡数据库取到的该学生真实数据。你必须优先依据它回答；用户问什么就把答案直接列出来，绝对不要回复“请你自己打开某某页面查看”这类把问题推回去的话。",
     "只有【实时数据】里确实没有相关字段时，才简短说明学渡暂时取不到这项数据，并给出最接近的可用信息，不要编造具体教室号或成绩。",
@@ -1952,20 +1869,15 @@ app.get("/api/assistant/status", (req, res) => {
   if (!rec) {
     return res.json({ success: false, sessionExpired: true, configured: false, message: "未登录或会话已过期" });
   }
-  if (isDemoSession(rec) && !isGrayEnabled()) return res.json(grayClosedPayload());
   const cfg = loadDsConfig();
-  const demoReady = isDemoSession(rec) && !!cfg.key && isGrayEnabled();
   res.json({
     success: true,
-    configured: demoReady || !!cfg.key,
-    serverKey: demoReady,
-    allowUserKey: !demoReady,
-    demo: isDemoSession(rec),
+    configured: !!cfg.key,
+    serverKey: false,
+    allowUserKey: true,
     model: cfg.model,
     applyPath: "企业微信 → 工作台 → AI服务 → DS API key申请",
-    message: demoReady
-      ? "演示账号已接通学院 DeepSeek，可直接提问"
-      : "请在企业微信工作台申请自己的 DeepSeek API Key，填入学渡助手后即可使用"
+    message: "请在企业微信工作台申请自己的 DeepSeek API Key，填入学渡助手后即可使用"
   });
 });
 
@@ -1974,10 +1886,9 @@ app.post("/api/assistant/chat", async (req, res) => {
     const sessionId = req.body.sessionId || req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);
     if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-    if (isDemoSession(rec) && !isGrayEnabled()) return res.json(grayClosedPayload());
     const cfg = loadDsConfig();
-    const userKey = isDemoSession(rec) ? "" : String(req.body.apiKey || req.headers["x-ds-key"] || "").trim();
-    const apiKey = (isDemoSession(rec) ? cfg.key : (userKey || cfg.key));
+    const userKey = String(req.body.apiKey || req.headers["x-ds-key"] || "").trim();
+    const apiKey = userKey || cfg.key;
     if (!apiKey) {
       return res.status(503).json({
         success: false,
@@ -2101,70 +2012,7 @@ app.post("/api/assistant/chat", async (req, res) => {
 
 // Health check
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", sessions: sessions.size, gray: isGrayEnabled() });
-});
-
-app.get("/api/gray/status", (req, res) => {
-  res.json({ success: true, enabled: isGrayEnabled(), demoUser: isGrayEnabled() ? DEMO_USER : "" });
-});
-
-app.post("/api/gray/control", (req, res) => {
-  if (!isGrayAdminReady()) {
-    return res.status(503).json({ success: false, message: "演示管理未配置" });
-  }
-  if (!hasGrayAdminAccess(req)) return res.status(403).json({ success: false, message: "无权管理演示功能" });
-  if (!req.body || typeof req.body.enabled === "undefined") {
-    const enabled = isGrayEnabled();
-    return res.json({ success: true, enabled, message: enabled ? "演示功能当前已启用" : "演示功能当前已停用" });
-  }
-  const raw = req.body.enabled;
-  const on = raw === true || raw === "true" || raw === 1 || raw === "1";
-  if (on && !ENV_GRAY_ENABLED) {
-    return res.status(409).json({ success: false, enabled: false, message: "启用演示功能需要配置 GRAY_ENABLED=1 并重启服务" });
-  }
-  grayDisabledAtRuntime = !on;
-  if (!on) {
-    for (const [id, rec] of sessions) {
-      if (rec && rec.demo) deleteSession(id);
-    }
-  }
-  res.json({ success: true, enabled: isGrayEnabled(), message: isGrayEnabled() ? "演示功能已启用" : "演示功能已停用" });
-});
-
-app.post("/api/survey", (req, res) => {
-  if (!isGrayEnabled()) return res.json(grayClosedPayload());
-  const sessionId = (req.body && req.body.sessionId) || req.headers["x-session-id"];
-  const rec = getSession(sessionId);
-  if (!rec) return res.json({ success: false, sessionExpired: true, message: "未登录或会话已过期" });
-  const answers = (req.body && req.body.answers && typeof req.body.answers === "object") ? req.body.answers : {};
-  const feelMap = { "很难用": 1, "一般": 2, "还行": 3, "好用": 4, "会推荐": 5 };
-  let score = Number(req.body && req.body.score);
-  if (!score && answers.feel) score = feelMap[String(answers.feel)] || 0;
-  if (!score || score < 1 || score > 5) return res.json({ success: false, message: "请先打分" });
-  const used = Array.isArray(answers.used) ? answers.used : (Array.isArray(req.body.used) ? req.body.used : []);
-  const row = {
-    at: new Date().toISOString(),
-    studentId: rec.username || "",
-    demo: !!rec.demo,
-    score,
-    used: used.slice(0, 12).map(String),
-    answers: {
-      feel: String(answers.feel || "").slice(0, 20),
-      used: used.slice(0, 12).map(String),
-      schedule: String(answers.schedule || "").slice(0, 20),
-      pain: String(answers.pain || "").slice(0, 40),
-      wish: String(answers.wish || "").slice(0, 40),
-      again: String(answers.again || "").slice(0, 20)
-    },
-    version: String((req.body && req.body.version) || "").slice(0, 20)
-  };
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.appendFileSync(SURVEY_FILE, JSON.stringify(row) + "\n");
-    res.json({ success: true, message: "已收到" });
-  } catch (e) {
-    res.json({ success: false, message: "提交失败" });
-  }
+  res.json({ status: "ok", sessions: sessions.size });
 });
 
 // Start server

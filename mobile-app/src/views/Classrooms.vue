@@ -13,11 +13,6 @@
       </button>
     </header>
 
-    <section v-if="store.isDemo" class="demo-notice">
-      <span class="demo-dot"></span>
-      <span>当前是演示账号，教室数据为虚构示例。用真实学号登录后即为教务实时空闲教室。</span>
-    </section>
-
     <!-- Query Filter Form -->
     <section class="filter-card">
       <div class="field-grid-row">
@@ -285,30 +280,6 @@ onMounted(() => {
   font-weight: 800;
   color: var(--text-primary);
 }
-.demo-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(255,247,237,0.9), rgba(254,243,199,0.75));
-  border: 1px solid rgba(217, 119, 6, 0.22);
-  font-size: 12px;
-  line-height: 1.5;
-  color: #92400e;
-  font-weight: 600;
-}
-.demo-dot {
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  margin-top: 5px;
-  border-radius: 50%;
-  background: #F59E0B;
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
-}
-
 .filter-card, .result-card {
   background: var(--surface-card);
   border: 1px solid var(--border-card);

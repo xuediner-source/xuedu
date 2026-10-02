@@ -65,12 +65,6 @@ const routes = [
     name: 'Assistant',
     component: () => import('@/views/Assistant.vue'),
     meta: { title: '学渡助手' }
-  },
-  {
-    path: '/survey',
-    name: 'Survey',
-    component: () => import('@/views/Survey.vue'),
-    meta: { title: '体验反馈' }
   }
 ]
 

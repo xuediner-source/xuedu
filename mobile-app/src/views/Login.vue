@@ -60,15 +60,6 @@
 
         <p class="login-alert-box" v-if="errorMsg">{{ errorMsg }}</p>
 
-        <button
-          class="demo-fast-btn"
-          type="button"
-          :disabled="store.authLoading || restoring"
-          @click="fillDemo"
-        >
-          使用演示账号进入 ›
-        </button>
-        <p class="demo-caption-hint">学号 xuedu_demo · 密码 xuedu2026 · 数据均为虚构</p>
         <p class="credential-hint">不保存教务密码；会话过期后需重新登录。</p>
       </div>
     </main>
@@ -113,17 +104,11 @@ async function handleLogin() {
   const ok = await store.login(username.value.trim(), password.value)
   if (ok) {
     password.value = ''
-    showToast(store.isDemo ? '已进入演示账号' : '登录成功')
+    showToast('登录成功')
     router.push('/home')
   } else {
     errorMsg.value = store.authError || '登录失败，请核对学号或密码'
   }
-}
-
-async function fillDemo() {
-  username.value = 'xuedu_demo'
-  password.value = 'xuedu2026'
-  await handleLogin()
 }
 
 onMounted(async () => {
@@ -277,30 +262,6 @@ onMounted(async () => {
   font-weight: 500;
   line-height: 1.4;
   text-align: center;
-}
-
-.demo-fast-btn {
-  min-height: 44px;
-  width: 100%;
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.demo-fast-btn:active {
-  opacity: 0.75;
-}
-.demo-caption-hint {
-  text-align: center;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 2px;
 }
 
 .login-footer {

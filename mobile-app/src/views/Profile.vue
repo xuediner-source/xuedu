@@ -43,21 +43,6 @@
     <!-- 组 2：系统与设置 -->
     <div class="group-section-title">系统与设置</div>
     <div class="inset-grouped-box">
-      <div v-if="store.isDemo" class="inset-list-row" @click="router.push('/survey')">
-        <div class="inset-row-left">
-          <div class="inset-row-icon icon-purple">
-            <Icon name="sparkles" :size="16" color="#FFFFFF" />
-          </div>
-          <div class="inset-row-text">
-            <span class="row-main-title">填写体验反馈</span>
-            <span class="row-sub-title">大约 1 分钟 · 虚构数据不影响真实教务</span>
-          </div>
-        </div>
-        <div class="inset-row-right">
-          <Icon name="chevron-right" :size="14" color="#8E8E93" />
-        </div>
-      </div>
-
       <div class="inset-list-row" @click="onCheckUpdateClick">
         <div class="inset-row-left">
           <div class="inset-row-icon icon-orange">

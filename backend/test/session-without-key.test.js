@@ -6,10 +6,11 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 
-const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "cqjtu-demo-test-"));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "cqjtu-session-test-"));
 process.env.NODE_ENV = "test";
 process.env.DATA_DIR = dataDir;
 process.env.GRAY_ENABLED = "1";
+process.env.DEMO_ENABLED = "1";
 delete process.env.SESSION_ENCRYPTION_KEY;
 
 const { app, testHooks } = require("../server");
@@ -29,18 +30,26 @@ test("unkeyed real sessions stay in memory and never create a cookie-jar file", 
   assert.equal(fs.existsSync(path.join(dataDir, "sessions.json")), false);
 });
 
-test("fictional gray demo login works without a real-session encryption key", async () => {
+test("retired test account cannot log in even when old demo environment switches are set", async () => {
   const response = await fetch(`${baseUrl}/api/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username: "xuedu_demo", password: "xuedu2026" }),
   });
   const body = await response.json();
-  assert.equal(body.success, true);
-  assert.equal(body.demo, true);
-  assert.equal(body.sessionPersistent, false);
-  assert.ok(testHooks.getSession(body.sessionId));
+  assert.equal(body.success, false);
+  assert.match(body.message, /测试账号已停用/);
+  assert.equal(body.sessionId, undefined);
+  assert.equal(testHooks.sessions.size, 1);
   assert.equal(fs.existsSync(path.join(dataDir, "sessions.json")), false);
+});
+
+test("old demo session records expire without returning fictional data", async () => {
+  testHooks.sessions.set("retired-demo", { demo: true, username: "legacy-demo", createdAt: Date.now() });
+  const body = await (await fetch(`${baseUrl}/api/schedule?sessionId=retired-demo`)).json();
+  assert.equal(body.success, false);
+  assert.equal(body.sessionExpired, true);
+  assert.equal(testHooks.sessions.has("retired-demo"), false);
 });
 
 test.after(async () => {

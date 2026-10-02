@@ -1,8 +1,8 @@
 # 统一测试版发布
 
-当前版本为 `0.0.1`，Android `versionCode=250`，频道为 `test`。安装包命名为 `xuedu-test-0.0.1.apk`，GitHub Release 标签为 `v0.0.1`，并标记为 prerelease。
+当前版本为 `0.0.1`，Android `versionCode=251`，频道为 `test`。安装包命名为 `xuedu-test-0.0.1.apk`，GitHub Release 标签为 `v0.0.1`，并标记为 prerelease。
 
-历史灰测和内测包不再作为独立发布渠道。规范下载路由为 `/download/app-test.apk`；旧 `/download/app-gray.apk` 和 `/download/app-latest.apk` 仅重定向至规范路由。演示账号的 `DEMO_ENABLED` 开关独立于安装包发布频道。
+历史灰测和内测包不再作为独立发布渠道。规范下载路由为 `/download/app-test.apk`；旧 `/download/app-gray.apk` 和 `/download/app-latest.apk` 仅重定向至规范路由。演示账号、虚构数据分支、体验问卷及灰测管理接口已移除；旧演示会话升级时失效，学校教务账号正常使用。
 
 ## 构建与发布
 
@@ -19,4 +19,4 @@
 
 本地签名构建需设置以上密码/别名环境变量及绝对路径 `ANDROID_KEYSTORE_PATH`，然后在 `mobile-app/` 执行 `npm run build:android:release`。该命令需要 JDK 17 和 Android SDK，不会使用默认密码或签名文件。
 
-后端发布元数据位于 `backend/app-release.json`。只有 APK 已真实上传并可下载后才把 `published` 改为 `true`；未发布或链接不合法时不向客户端提供安装包更新。修改后端源码或此文件须部署到服务端后才会影响线上 API。
+后端发布元数据位于 `backend/app-release.json`。发布标签保留构建时源码；后端部署请采用 `main` 中发布后启用的元数据。只有 APK 已真实上传并可下载后才把 `published` 改为 `true`；未发布或链接不合法时不向客户端提供安装包更新。修改后端源码或此文件须部署到服务端后才会影响线上 API。

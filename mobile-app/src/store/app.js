@@ -15,12 +15,18 @@ const APP_CHANNEL = typeof __APP_CHANNEL__ !== 'undefined' ? __APP_CHANNEL__ : '
 export const useAppStore = defineStore('app', () => {
   removeLocal('loginPass')
   removeLocal('xueduDsApiKey')
+  const previousAccount = readLocal('loginUser') || readLocal('studentId')
+  migrateLegacyCache(previousAccount)
+  if (readLocal('isDemo') === '1' || previousAccount === 'xuedu_demo') {
+    clearAccountCache(previousAccount)
+    try { sessionStorage.removeItem(`xueduAssistant:${readLocal('studentId')}`) } catch {}
+    for (const key of ['sessionId', 'studentName', 'studentId', 'loginUser']) removeLocal(key)
+  }
+  removeLocal('isDemo')
   const sessionId = ref(readLocal('sessionId'))
   const account = ref(readLocal('loginUser') || readLocal('studentId'))
-  migrateLegacyCache(account.value)
   const studentName = ref(readLocal('studentName'))
   const studentId = ref(readLocal('studentId'))
-  const isDemo = ref(readLocal('isDemo') === '1')
   const clock = ref(new Date())
   const isOffline = ref(typeof navigator !== 'undefined' && navigator.onLine === false)
   const sessionExpired = ref(false)
@@ -127,8 +133,17 @@ export const useAppStore = defineStore('app', () => {
   }
   async function login(username, password) {
     return run('auth', async epoch => {
+      if (String(username).trim() === 'xuedu_demo') {
+        requests.auth.error = '测试账号已停用，请使用学校教务账号登录'
+        return false
+      }
       const res = await apiClient.post('/login', { username, password }, { timeout: 45000 })
       if (epoch !== generation) return false
+      if (res.data.demo) {
+        if (res.data.sessionId) void apiClient.post('/logout', {}, { headers: { 'X-Session-Id': res.data.sessionId }, timeout: 5000 }).catch(() => {})
+        requests.auth.error = '测试账号已停用，请使用学校教务账号登录'
+        return false
+      }
       if (!res.data.success || !res.data.sessionId) {
         requests.auth.error = res.data.message || '登录失败'
         return false
@@ -141,13 +156,11 @@ export const useAppStore = defineStore('app', () => {
       sessionId.value = res.data.sessionId
       studentName.value = res.data.studentName || ''
       studentId.value = res.data.studentId || username
-      isDemo.value = !!res.data.demo
       sessionExpired.value = false
       writeLocal('sessionId', sessionId.value)
       writeLocal('studentName', studentName.value)
       writeLocal('studentId', studentId.value)
       writeLocal('loginUser', username)
-      writeLocal('isDemo', isDemo.value ? '1' : '0')
       removeLocal('loginPass')
       void fetchProfile()
       return true
@@ -158,6 +171,11 @@ export const useAppStore = defineStore('app', () => {
     return run('auth', async epoch => {
       const res = await requestWithSession('/session')
       if (epoch !== generation) return false
+      if (res.data.demo) {
+        await logout()
+        requests.auth.error = '测试账号已停用，请使用学校教务账号登录'
+        return false
+      }
       if (res.data.success) { sessionExpired.value = false; return true }
       requests.auth.error = EXPIRED_MESSAGE
       return false
@@ -298,7 +316,7 @@ export const useAppStore = defineStore('app', () => {
     const previousStudent = studentId.value
     generation++; scheduleSequence++; resetRequestState()
     sessionId.value = ''; studentName.value = ''; studentId.value = ''; account.value = ''
-    isDemo.value = false; sessionExpired.value = false
+    sessionExpired.value = false
     applySnapshot(null)
     grades.value = []; exams.value = []; semesters.value = []; customCourses.value = []
     profile.value = null; program.value = null; calendar.value = null; assistantKey.value = ''
@@ -347,7 +365,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     sessionId, studentName, studentId, courses, customCourses, allCourses, todayCourses, tomorrowCourses, periods, semester, semesterText,
     semesterStart, currentWeek, grades, semesters, scheduleSemesters, exams, profile, program,
-    weather, calendar, assistantKey, campus, density, theme, scheduleDays, loading, error, requests, isLoggedIn, isDemo,
+    weather, calendar, assistantKey, campus, density, theme, scheduleDays, loading, error, requests, isLoggedIn,
     clock, updateClock, isOffline, setOffline, scheduleSyncedAt, sessionExpired, ...resourceState,
     login, ensureSession, fetchSchedule, fetchGrades, fetchExams, fetchWeather, fetchCalendar,
     fetchProfile, fetchProgram, fetchClassrooms, logout, checkUpdate, restoreSession,

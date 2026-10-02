@@ -1,8 +1,9 @@
 {
   "version": "0.0.1",
-  "versionCode": 250,
+  "versionCode": 251,
   "channel": "test",
   "published": false,
+  "publishDate": "2026-10-02",
   "downloadUrl": "https://github.com/xuediner-source/xuedu/releases/download/v0.0.1/xuedu-test-0.0.1.apk",
-  "releaseNotes": "测试版 0.0.1"
+  "releaseNotes": "测试版 0.0.1：移除演示账号及体验问卷"
 }

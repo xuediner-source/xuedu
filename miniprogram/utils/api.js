@@ -94,7 +94,6 @@ function login(username, password) {
       app.setLoginInfo(data.sessionId, data.studentName, data.studentId || username);
       return data;
     }
-    if (data.grayClosed) throw new Error(data.message || '演示功能已关闭');
     throw new Error(data.message || '登录失败');
   });
 }
@@ -109,14 +108,13 @@ async function getSchedule(semester) {
       redirectToLoginIfExpired(data);
       const error = new Error(data.message || '获取课表失败');
       error.sessionExpired = !!data.sessionExpired;
-      error.grayClosed = !!data.grayClosed;
       error.scheduleUnavailable = /无法确认课表所属学期/.test(error.message);
       throw error;
     }
     writeScheduleCache(studentId, data);
     return data;
   } catch (error) {
-    if (error.sessionExpired || error.grayClosed) throw error;
+    if (error.sessionExpired) throw error;
     if (error.network || Number(error.statusCode) >= 500 || error.scheduleUnavailable) {
       const cached = readScheduleCache(studentId, requestedSemester, error.message);
       if (cached) return cached;

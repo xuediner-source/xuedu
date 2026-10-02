@@ -23,7 +23,7 @@ if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(versionName
   fail(`无效的 App 版本号：${versionName}`)
 }
 
-const versionCode = String(process.env.ANDROID_VERSION_CODE || '250').trim()
+const versionCode = String(process.env.ANDROID_VERSION_CODE || '251').trim()
 if (!/^\d+$/.test(versionCode) || Number(versionCode) < 1 || Number(versionCode) > 2100000000) {
   fail('ANDROID_VERSION_CODE 必须是 1 到 2100000000 之间的整数')
 }
