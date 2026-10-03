@@ -1,14 +1,13 @@
 <template>
   <div class="page-container classrooms-page">
     <header class="cw-top-nav">
-      <button class="nav-icon-btn" @click="closeToWidget">
+      <button class="nav-icon-btn" type="button" aria-label="返回" @click="closeToWidget">
         <Icon name="arrow-left" :size="20" color="#161513" />
       </button>
       <div class="nav-title-col">
-        <p class="xd-kicker">XD-ROOM</p>
         <h1 class="nav-title">空闲教室</h1>
       </div>
-      <button class="nav-icon-btn" @click="search">
+      <button class="nav-icon-btn" type="button" aria-label="刷新" :disabled="loading" @click="search">
         <Icon name="refresh" :size="18" color="#8A8278" />
       </button>
     </header>
@@ -19,6 +18,7 @@
         <div class="field">
           <label>教学周</label>
           <select v-model="form.week">
+            <option value="">请选择教学周</option>
             <option v-for="opt in filters.weeks" :key="'w'+opt.value" :value="opt.value">{{ opt.text }}</option>
           </select>
         </div>
@@ -70,6 +70,7 @@
         </div>
       </div>
 
+      <p class="estimate-note">类型和教学楼按房间名估算，以教务系统为准。</p>
       <button class="search-btn" :disabled="loading" @click="search">
         {{ loading ? '正在快速检索...' : '查询空闲教室' }}
       </button>
@@ -79,7 +80,7 @@
     <section class="result-card">
       <div class="result-head">
         <h2>空闲教室列表</h2>
-        <span class="count-tag" v-if="queried">{{ rooms.length }} 间可用</span>
+        <span class="count-tag" v-if="queried && !errorText">{{ rooms.length }} 间可用</span>
       </div>
 
       <div v-if="loading" class="empty-state">
@@ -90,6 +91,13 @@
       <div v-else-if="!queried" class="empty-state">
         <Icon name="location" :size="28" color="#8A8278" />
         <p>选择周次和节次后点击查询</p>
+      </div>
+
+      <div v-else-if="errorText" class="empty-state">
+        <Icon name="clock" :size="28" color="#B4ADA3" />
+        <p>{{ store.sessionExpired ? '登录已过期' : errorText }}</p>
+        <span class="empty-sub">{{ store.sessionExpired ? '重新登录后再查，不要把失败当成没有空教室' : '请重试，或更换周次和节次' }}</span>
+        <button v-if="store.sessionExpired" class="search-btn" type="button" @click="router.push('/login')">重新登录</button>
       </div>
 
       <div v-else-if="!rooms.length" class="empty-state">
@@ -133,6 +141,7 @@ const { closeToWidget } = useWidgetPage()
 const showMore = ref(false)
 const queried = ref(false)
 const loading = ref(false)
+const errorText = ref('')
 const rooms = ref([])
 
 const BUILDINGS_KXC = [
@@ -178,8 +187,8 @@ const filters = reactive({
   ]
 })
 
-const curWeekNum = Number(store.currentWeek || store.calcCurrentWeek() || 1)
-const curWeek = String(Math.min(20, Math.max(1, curWeekNum)))
+const knownWeek = Number(store.currentWeek)
+const curWeek = Number.isInteger(knownWeek) && knownWeek >= 1 ? String(Math.min(20, knownWeek)) : ''
 const curDay = String((new Date().getDay() + 6) % 7 + 1)
 
 const form = reactive({
@@ -206,11 +215,18 @@ async function search() {
     showToast('请选择周次、星期和节次')
     return
   }
+  const xnxq = String(store.semester || '').trim()
+  if (!xnxq) {
+    queried.value = true
+    rooms.value = []
+    errorText.value = '请先同步课表，确认当前学期后再查空教室'
+    showToast(errorText.value)
+    return
+  }
   loading.value = true
   queried.value = true
+  errorText.value = ''
   try {
-    const term = String(store.semester || '')
-    const xnxq = /2026-2027-1/.test(term) ? term : '2026-2027-1'
     const data = await store.fetchClassrooms({
       query: '1',
       xnxq,
@@ -223,16 +239,16 @@ async function search() {
     })
     if (data?.success) {
       rooms.value = data.rooms || []
-      if (!rooms.value.length) {
-        showToast('所选时段暂无空闲教室')
-      }
+      if (!rooms.value.length) showToast('所选时段暂无空闲教室')
     } else {
       rooms.value = []
-      showToast(data?.message || '查询失败')
+      errorText.value = data?.message || '查询失败，请检查网络'
+      showToast(errorText.value)
     }
   } catch (e) {
     rooms.value = []
-    showToast('查询失败，请检查网络')
+    errorText.value = '查询失败，请检查网络'
+    showToast(errorText.value)
   } finally {
     loading.value = false
   }
@@ -243,8 +259,7 @@ onMounted(() => {
     router.push('/login')
     return
   }
-  // Auto-search on open so user immediately sees real free rooms
-  search()
+  if (form.week && store.semester) search()
 })
 </script>
 
@@ -252,7 +267,7 @@ onMounted(() => {
 .classrooms-page {
   max-width: 600px;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 12px) 16px 28px;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 28px);
 }
 .cw-top-nav {
   display: flex;
@@ -262,8 +277,8 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 .nav-icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card-solid);
@@ -274,7 +289,12 @@ onMounted(() => {
   box-shadow: var(--shadow-card);
 }
 .nav-title-col { text-align: center; }
-.nav-title-col .xd-kicker { display: block; margin-bottom: 2px; }
+.estimate-note {
+  margin: 8px 0 0;
+  color: var(--text-secondary, #8a8278);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .nav-title {
   font-size: 19px;
   font-weight: 800;

@@ -33,7 +33,6 @@
         <div class="input-field-block">
           <label for="xuedu-password" class="field-label">教务系统登录密码</label>
           <div class="input-row" :class="{ 'has-error': errors.password }">
-            <Icon name="clock" :size="18" color="var(--text-secondary)" />
             <input
               id="xuedu-password"
               autocomplete="current-password"
@@ -55,12 +54,12 @@
           @click="handleLogin"
         >
           <van-loading v-if="store.authLoading || restoring" size="20px" color="#ffffff" />
-          <span v-else>登录</span>
+          <span>{{ restoring ? '正在恢复…' : (store.authLoading ? '正在登录…' : '登录') }}</span>
         </button>
 
         <p class="login-alert-box" v-if="errorMsg">{{ errorMsg }}</p>
 
-        <p class="credential-hint">不保存教务密码；会话过期后需重新登录。</p>
+        <p class="credential-hint">不保存教务密码。登录过期后需要重新输入密码。</p>
       </div>
     </main>
 
@@ -117,6 +116,7 @@ onMounted(async () => {
   const ok = await store.restoreSession()
   restoring.value = false
   if (ok) router.replace('/home')
+  else if (store.authError) errorMsg.value = store.authError
 })
 </script>
 

@@ -9,9 +9,9 @@
     <div v-else class="app-layout">
       <main class="app-content">
         <router-view v-slot="{ Component }">
-          <transition name="app-page" mode="out-in">
+          <keep-alive>
             <component :is="Component" />
-          </transition>
+          </keep-alive>
         </router-view>
       </main>
 
@@ -38,7 +38,7 @@
     <div v-if="shouldShowOverlay" class="force-update-mask" @click.self="enterApp">
       <div class="force-update-card">
         <h2>{{ overlayTitle }}</h2>
-        <p class="force-ver">当前 {{ currentVersionLabel }} · 最新 {{ latestVersionLabel }}</p>
+        <p class="force-ver">当前 {{ currentVersionLabel }}（{{ currentVersionInfo.versionCode || '未知代码' }}） · 最新 {{ latestVersionLabel }}（{{ releaseCode(forceGate || update.latestInfo) || '未知代码' }}）</p>
         <p class="force-notes" v-if="forceGate?.releaseNotes && !update.visible">{{ forceGate.releaseNotes }}</p>
         <div v-if="update.visible" class="update-progress-block">
           <div class="update-progress-track">
@@ -76,6 +76,7 @@ const store = useAppStore()
 const update = useInAppUpdate()
 const currentRoute = computed(() => route.path)
 const forceGate = ref(null)
+const dismissedUpdateCode = ref(readDismissedUpdateCode())
 const currentVersionInfo = ref({ versionName: APP_VERSION, versionCode: 0 })
 const currentVersionLabel = computed(() => formatAppVersion(currentVersionInfo.value.versionName))
 const latestVersionLabel = computed(() => formatAppVersion(
@@ -87,12 +88,21 @@ function isUpdateBusy() {
   return update.busy || update.status === 'downloading' || update.status === 'needPermission' || update.status === 'installing'
 }
 
+function readDismissedUpdateCode() {
+  try { return Number(sessionStorage.getItem('xueduDismissedUpdateCode')) || 0 } catch { return 0 }
+}
+
+function releaseCode(info) {
+  return Number(info?.versionCode) || 0
+}
+
 const shouldShowOverlay = computed(() => {
-  if (update.visible && (update.status === 'downloading' || update.status === 'needPermission' || update.status === 'installing' || update.status === 'error')) {
-    return true
-  }
-  if (forceGate.value && isUpdateAvailable(currentVersionInfo.value, forceGate.value)) return true
-  return false
+  const info = forceGate.value || update.latestInfo
+  if (info?.forceUpdate === true && isUpdateAvailable(currentVersionInfo.value, info)) return true
+  const code = releaseCode(info)
+  if (code > 0 && dismissedUpdateCode.value === code) return false
+  if (update.visible && (update.status === 'downloading' || update.status === 'needPermission' || update.status === 'installing' || update.status === 'error')) return true
+  return !!(forceGate.value && isUpdateAvailable(currentVersionInfo.value, forceGate.value))
 })
 
 const overlayTitle = computed(() => {
@@ -137,6 +147,11 @@ async function refreshUpdateGate() {
     forceGate.value = null
     return
   }
+  const code = releaseCode(info)
+  if (info.forceUpdate !== true && code > 0 && dismissedUpdateCode.value === code) {
+    forceGate.value = null
+    return
+  }
   forceGate.value = info
 }
 
@@ -162,7 +177,13 @@ async function downloadUpdate() {
 }
 
 function enterApp() {
-  if (isUpdateBusy()) return
+  const info = forceGate.value || update.latestInfo
+  if (info?.forceUpdate === true) return
+  const code = releaseCode(info)
+  if (code > 0) {
+    dismissedUpdateCode.value = code
+    try { sessionStorage.setItem('xueduDismissedUpdateCode', String(code)) } catch {}
+  }
   forceGate.value = null
   if (update.status === 'error') update.reset()
 }
@@ -274,6 +295,10 @@ onMounted(async () => {
     if (!isUpdateBusy()) refreshUpdateGate()
   })
   document.addEventListener('visibilitychange', onVisible)
+  if (store.isLoggedIn) {
+    const alive = await store.restoreSession()
+    if (alive) refreshScheduleInBackground()
+  }
   await refreshUpdateGate()
 })
 

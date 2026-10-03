@@ -7,7 +7,7 @@
       </button>
       <div class="as-title-wrap">
         <h1 class="nav-title">学渡助手</h1>
-        <p class="as-sub">{{ canChat && serverKey ? '已接通学院 DeepSeek 接口' : '配置个人 DeepSeek 密钥' }}</p>
+        <p class="as-sub">{{ statusError || (canChat && serverKey ? '已接通学院 DeepSeek 接口' : '配置个人 DeepSeek 密钥') }}</p>
       </div>
       <button class="nav-icon-btn" type="button" aria-label="申请与密钥指南" @click="showGuide = !showGuide">
         <Icon name="sparkles" :size="18" :color="showGuide ? '#007AFF' : '#8E8E93'" />
@@ -96,6 +96,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore, API_BASE, apiClient } from '@/store/app'
 import { showToast } from '@/utils/appToast'
+import { summarizeGrades } from '@/utils/gradeSummary.js'
 import Icon from '@/components/Icon.vue'
 import BrandMark from '@/components/BrandMark.vue'
 import { useWidgetPage } from '@/composables/useWidgetPage'
@@ -110,6 +111,7 @@ const keyDraft = ref('')
 const loading = ref(false)
 const showGuide = ref(false)
 const errorText = ref('')
+const statusError = ref('')
 const streamingText = ref('')
 const localKey = computed({ get: () => store.assistantKey, set: value => { store.assistantKey = value } })
 localStorage.removeItem(KEY_STORE)
@@ -156,7 +158,7 @@ function clearKey() {
   localStorage.removeItem(KEY_STORE)
   keyDraft.value = ''
   showGuide.value = true
-  showToast('已清除本机密钥')
+  showToast('已清除本次登录的密钥')
 }
 
 function openWeCom() {
@@ -246,7 +248,10 @@ function weekdayFromText(text) {
 
 async function buildClassroomContext(question) {
   if (!CLASSROOM_ASK.test(question)) return null
-  const week = store.currentWeek || store.calcCurrentWeek()
+  const week = store.currentWeek
+  if (!Number.isInteger(week) || week < 1 || !store.semester) {
+    return { query: '空教室', error: '教学周或学期尚未确认，请先同步课表' }
+  }
   const weekday = weekdayFromText(question)
   const period = periodSlotFromText(question)
   const campusId = campusIdFromText(question)
@@ -254,6 +259,7 @@ async function buildClassroomContext(question) {
   try {
     const res = await store.fetchClassrooms({
       query: '1',
+      xnxq: store.semester,
       week: String(week),
       weekday: String(weekday),
       period: String(period),
@@ -280,7 +286,7 @@ async function buildClassroomContext(question) {
 
 async function buildLiveContext(question) {
   const now = store.clock
-  const week = store.currentWeek || store.calcCurrentWeek()
+  const week = store.currentWeek
   const todayName = WEEKDAY_NAMES[store.weekdayIndex()]
   const brief = c => ({
     name: c.name,
@@ -290,76 +296,52 @@ async function buildLiveContext(question) {
     room: c.room || '待定',
     weeks: c.weeks || ''
   })
-  const weekCourses = store.allCourses
-    .filter(c => store.isCourseInWeek(c, week))
-    .sort((a, b) => a.dayIndex - b.dayIndex || a.rowIndex - b.rowIndex)
+  const weekCourses = Number.isInteger(week) && week >= 1
+    ? store.allCourses
+      .filter(c => store.isCourseInWeek(c, week))
+      .sort((a, b) => a.dayIndex - b.dayIndex || a.rowIndex - b.rowIndex)
+      .slice(0, 20)
+    : []
 
-  const grades = store.grades || []
-  let credits = 0
-  let scoreSum = 0
-  let scoreCount = 0
-  let passed = 0
-  let gpaWeight = 0
-  let gpaCredits = 0
-  const failed = []
-  const natureMap = new Map()
-  grades.forEach(g => {
-    const c = parseFloat(g.credit) || 0
-    credits += c
-    const s = parseFloat(g.score)
-    if (!isNaN(s)) {
-      scoreSum += s
-      scoreCount++
-      if (s >= 60) passed++
-      else failed.push({ name: g.courseName, score: s })
-    }
-    const gpa = parseFloat(g.gpa)
-    if (!isNaN(gpa) && c > 0) {
-      gpaWeight += gpa * c
-      gpaCredits += c
-    }
-    const nature = g.nature || '其他'
-    natureMap.set(nature, (natureMap.get(nature) || 0) + c)
-  })
-  const avgScore = scoreCount ? (scoreSum / scoreCount).toFixed(1) : null
-  const overallGpa = gpaCredits ? (gpaWeight / gpaCredits).toFixed(2) : null
-  const natureBreakdown = Array.from(natureMap.entries()).map(([k, v]) => k + ': ' + v.toFixed(1) + '学分')
+  const gradeRows = store.grades || []
+  const summary = summarizeGrades(gradeRows)
+  const grades = gradeRows.length || !store.gradesError
+    ? {
+        total: summary.total,
+        credits: summary.credits.toFixed(1),
+        average: summary.average == null ? null : Number(summary.average.toFixed(1)),
+        gpa: summary.gpa == null ? null : Number(summary.gpa.toFixed(2)),
+        passed: summary.passed,
+        byNature: summary.byNature.slice(0, 8).map(row => ({
+          name: row.name,
+          credits: Number(row.credits.toFixed(1)),
+          count: row.count
+        }))
+      }
+    : undefined
 
-  const exams = (store.exams || []).map(e => ({
-    course: e.courseName || e.name || '考试科目',
-    time: e.time || e.examTime || '',
-    room: e.room || e.classroom || '地点待定',
-    seat: e.seat || ''
+  const exams = (store.exams || []).slice(0, 8).map(e => ({
+    courseName: e.courseName || e.name || '考试科目',
+    examTime: e.examTime || e.time || '',
+    examRoom: e.examRoom || e.room || e.classroom || ''
   }))
 
   const classroomContext = await buildClassroomContext(question)
 
   return {
-    today: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()) + ' ' + todayName,
-    currentWeek: week,
-    currentCampus: campusNameOf(store.campus === 'nanan' ? '01' : '02'),
+    now: now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()) + ' ' + todayName,
+    semester: store.semesterText || store.semester || '',
     student: {
       name: store.studentName,
       college: store.profile?.college || '',
       major: store.profile?.major || '',
-      className: store.profile?.className || '',
-      enrollYear: store.profile?.enrollYear || ''
+      className: store.profile?.className || ''
     },
     todayCourses: store.todayCourses.map(brief),
-    tomorrowCourses: store.tomorrowCourses.map(brief),
-    weekCoursesCount: weekCourses.length,
-    weekCoursesSample: weekCourses.slice(0, 12).map(brief),
-    gradesSummary: {
-      totalCourses: grades.length,
-      totalCredits: credits.toFixed(1),
-      avgScore,
-      overallGpa,
-      passedCount: passed,
-      failedCourses: failed.slice(0, 5),
-      natureBreakdown
-    },
-    examsUpcoming: exams.slice(0, 10),
-    classroomContext
+    weekCourses: Number.isInteger(week) && week >= 1 ? weekCourses.map(brief) : undefined,
+    grades,
+    exams,
+    classrooms: classroomContext
   }
 }
 
@@ -397,6 +379,7 @@ async function send(text) {
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}))
+      if (errJson.sessionExpired) store.sessionExpired = true
       throw new Error(errJson.message || ('请求失败 (' + res.status + ')'))
     }
 
@@ -421,6 +404,7 @@ async function send(text) {
           if (!dataStr || dataStr === '[DONE]') continue
           try {
             const data = JSON.parse(dataStr)
+            if (data.sessionExpired) store.sessionExpired = true
             if (data.error) throw new Error(data.error)
             const delta = data.choices?.[0]?.delta?.content || data.content || ''
             const think = data.choices?.[0]?.delta?.reasoning_content || ''
@@ -431,12 +415,16 @@ async function send(text) {
             } else if (!assistant.content && think) {
               streamingText.value = '正在组织回答…'
             }
-          } catch {}
+          } catch (err) {
+            if (err instanceof SyntaxError) continue
+            throw err
+          }
         }
       }
       if (!assistant.content) assistant.content = '这次没有生成到可见回答，请换个问法再试一次'
     } else {
       const json = await res.json()
+      if (json.sessionExpired) store.sessionExpired = true
       if (!json.success) throw new Error(json.message || '助手暂时不可用')
       messages.value.push({ role: 'assistant', content: json.content || '这次没有生成到可见回答，请换个问法再试一次' })
     }
@@ -454,10 +442,19 @@ async function send(text) {
 }
 
 async function refreshStatus() {
+  statusError.value = ''
   try {
     const { data: json } = await apiClient.get('/assistant/status', { headers: { 'X-Session-Id': store.sessionId }, timeout: 15000 })
+    if (json.sessionExpired) {
+      store.sessionExpired = true
+      statusError.value = json.message || '登录已过期'
+      serverKey.value = false
+      return
+    }
     serverKey.value = !!json.serverKey
-  } catch {}
+  } catch {
+    statusError.value = '助手状态暂时无法确认'
+  }
 }
 
 onUnmounted(() => activeRequest?.abort())

@@ -71,7 +71,7 @@
         <Icon name="schedule" :size="36" color="var(--primary, #007AFF)" />
       </div>
       <h3>{{ scheduleError || '暂无课表数据' }}</h3>
-      <p v-if="isSessionError">教务登录会话已过期，请重新登录以同步最新课表</p>
+      <p v-if="isSessionError">登录已过期，请重新登录以同步最新课表</p>
       <p v-else>请确认当前学期有课，或点击右上角切换学期</p>
       <button v-if="isSessionError" class="primary-fast-login-btn" @click="openLoginModal">立即重新登录</button>
       <button v-else class="compact-week-chip" @click="refresh">重新同步</button>
@@ -79,11 +79,15 @@
 
     <template v-else>
       <!-- ================= 1. 学习通同款 1-10 小节高精度网格 (Weekly Grid) ================= -->
-      <transition name="tab-slide" mode="out-in" @after-enter="onTabTransitionAfterEnter">
-        <section v-if="viewMode === 'week'" ref="exportRoot" class="grid-timetable-view" :key="'week-' + displayWeek" :style="{ '--schedule-day-count': visibleWeekdays.length }">
+      <transition name="tab-slide" @after-enter="onTabTransitionAfterEnter">
+        <section v-if="viewMode === 'week'" ref="exportRoot" class="grid-timetable-view" :style="{ '--schedule-day-count': visibleWeekdays.length }">
           <div v-if="hiddenWeekendCourseCount" class="weekend-course-notice">
             周末还有 {{ hiddenWeekendCourseCount }} 门课
             <button type="button" @click="showWeekendCourses">显示周末</button>
+          </div>
+          <div v-if="unplacedCourses.length" class="weekend-course-notice">
+            {{ unplacedCourses.length }} 门课的周次无法排进网格
+            <span>{{ unplacedLabel }}</span>
           </div>
           <!-- Weekday Header Row (5 or 7 days, with today's highlight) -->
           <div class="timetable-weekday-header">
@@ -203,10 +207,17 @@
               <Icon name="chevron-right" :size="14" color="#C7C7CC" />
             </button>
           </div>
+          <ul v-if="store.scheduleDays === 7 && readableWeekCourses.length" class="week-readout">
+            <li v-for="course in readableWeekCourses" :key="course.layoutKey">
+              <span>{{ weekdays[course.dayIndex]?.name }} {{ course.periodTime }}</span>
+              <strong>{{ course.name }}</strong>
+              <span>{{ course.formattedRoom || course.room || '地点待定' }}</span>
+            </li>
+          </ul>
         </section>
 
         <!-- ================= 2. 单日日程视图 (Day View) ================= -->
-        <section v-else ref="exportRoot" class="day-timeline-view" :key="'day-' + activeDay">
+        <section v-else ref="exportRoot" class="day-timeline-view">
           <div v-if="hiddenWeekendCourseCount" class="weekend-course-notice">
             周末还有 {{ hiddenWeekendCourseCount }} 门课
             <button type="button" @click="showWeekendCourses">显示周末</button>
@@ -242,7 +253,7 @@
 
             <div
               v-for="(course, ci) in visibleDayCourses"
-              :key="ci"
+              :key="course.layoutKey || ci"
               class="agenda-card-box interactive"
               @click="showDetail(course)"
               role="button"
@@ -260,7 +271,8 @@
                 <div class="agenda-meta-sub">
                   <span class="agenda-tag" v-if="course.formattedRoom">{{ course.formattedRoom }}</span>
                   <span class="agenda-tag" v-if="course.teacher">{{ course.teacher }}</span>
-                  <span class="agenda-tag">第{{ course.weeks }}周</span>
+                  <span class="agenda-tag" v-if="course.date">{{ course.date }}</span>
+                  <span class="agenda-tag" v-else-if="course.weeks">第{{ course.weeks }}周</span>
                 </div>
               </div>
               <Icon name="chevron-right" :size="16" color="#C7C7CC" />
@@ -335,7 +347,7 @@
             </div>
             <div class="m-texts-col">
               <span class="m-main-title">导入系统日历</span>
-              <span class="m-sub-text">生成 ICS，用系统分享打开日历 App</span>
+              <span class="m-sub-text">生成日历文件，用系统日历打开</span>
             </div>
             <Icon name="chevron-right" :size="16" color="#C7C7CC" />
           </div>
@@ -374,7 +386,7 @@
             </div>
             <div class="m-texts-col">
               <span class="m-main-title">课表密度</span>
-              <span class="m-sub-text">{{ densityLabel }} · 每节 {{ slotH }}px</span>
+              <span class="m-sub-text">{{ densityLabel }}</span>
             </div>
             <Icon name="chevron-right" :size="16" color="#C7C7CC" />
           </div>
@@ -589,7 +601,7 @@
       :before-close="handleFastLogin"
     >
       <div class="custom-schedule-form">
-        <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 6px;">登录会话已过期，请输入密码快速续期并同步课表：</p>
+        <p style="font-size: 12px; color: var(--text-secondary); margin: 0 0 6px;">登录已过期，请输入密码后继续同步课表：</p>
         <div class="cs-field">
           <label>学号</label>
           <input v-model="fastLoginForm.username" placeholder="请输入学号" />
@@ -624,19 +636,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, reactive, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onDeactivated, reactive, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/store/app'
 import { showToast, closeToast } from '@/utils/appToast'
 import Icon from '@/components/Icon.vue'
 import ScheduleSyncStatus from '@/components/ScheduleSyncStatus.vue'
-import html2canvas from 'html2canvas'
 import { widgetExpand } from '@/composables/useWidgetExpand'
 import { useWidgetPage } from '@/composables/useWidgetPage'
 import { shareFileNative, isNativeApp } from '@/utils/nativeShare'
 import { Clipboard } from '@capacitor/clipboard'
 import { cleanRoomShort, formatRoomBadge } from '@/utils/roomShort'
-import { courseTitleLayout } from '@/utils/courseCardLayout'
+import { courseTitleLayout, laneSpan } from '@/utils/courseCardLayout'
 import { CQJTU_PERIODS, calcWeekNumber, isCourseInWeek, parseDateOnly, parseWeekRanges } from '@/utils/scheduleModel'
 import { buildCalendarIcs } from '@/utils/calendarExport'
 import {
@@ -725,8 +736,14 @@ const vFitCourse = {
   updated(el, binding) {
     const state = cardObservers.get(el)
     if (!state) return
-    if (state.key !== binding.value) overflowKeys.delete(state.key)
+    const width = el.clientWidth
+    const height = el.clientHeight
+    const sameKey = state.key === binding.value
+    if (sameKey && state.width === width && state.height === height) return
+    if (!sameKey) overflowKeys.delete(state.key)
     state.key = binding.value
+    state.width = width
+    state.height = height
     state.schedule()
   },
   unmounted(el) {
@@ -866,6 +883,7 @@ function dateForWeekDay(week, dayIndex) {
 }
 
 const currentClock = computed(() => store.clock instanceof Date ? store.clock : new Date())
+const todayKey = computed(() => fmtYMD(currentClock.value))
 const scheduleLoading = computed(() => store.scheduleLoading ?? store.loading)
 const scheduleError = computed(() => store.scheduleError ?? '')
 
@@ -892,6 +910,20 @@ const activeCoursesInWeek = computed(() => {
     })
   })
 })
+
+const unplacedCourses = computed(() => {
+  const limit = Math.min(maxTeachingWeek.value || 30, 30)
+  return allCourses.value.filter(course => {
+    if (course.date) return false
+    const label = String(course.weeks || '').trim()
+    if (!label) return false
+    for (let week = 1; week <= limit; week += 1) {
+      if (isCourseInWeek(course, week, { semester: store.semester, semesterStart: store.semesterStart })) return false
+    }
+    return true
+  }).slice(0, 8)
+})
+const unplacedLabel = computed(() => unplacedCourses.value.map(course => `${course.name}（${course.weeks}）`).join('、'))
 
 const currentWeek = computed(() => Number.isInteger(store.currentWeek) ? store.currentWeek : null)
 const dataWeekLimit = computed(() => allCourses.value.reduce((max, course) => {
@@ -1054,7 +1086,7 @@ const weekdays = computed(() => {
   const names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   const shorts = ['一', '二', '三', '四', '五', '六', '日']
   const monday = weekStartDate(displayWeek.value)
-  const todayKey = fmtYMD(currentClock.value)
+  const today = todayKey.value
 
   return names.map((name, i) => {
     const d = monday ? new Date(monday) : null
@@ -1067,7 +1099,7 @@ const weekdays = computed(() => {
       dateNumber: d ? String(d.getDate()) : '—',
       monthDay: d ? fmtMD(d) : '日期待确认',
       fullDate: d ? fmtYMD(d) : '',
-      isToday: !!d && fmtYMD(d) === todayKey,
+      isToday: !!d && fmtYMD(d) === today,
       count
     }
   })
@@ -1177,7 +1209,7 @@ const dayBlocks = computed(() => {
       const pStart = CQJTU_PERIODS[startClamped - 1]
       const pEnd = CQJTU_PERIODS[endClamped - 1]
       const conflictCount = overlapCount(c, laneAssigned)
-      const conflictLanes = conflictCount ? laneEnds.length : 1
+      const placed = laneSpan({ ...c, conflictLane: conflictCount ? c.conflictLane : 0 }, conflictCount ? laneAssigned : [c])
 
       return {
         ...c,
@@ -1188,10 +1220,10 @@ const dayBlocks = computed(() => {
         top: topPx + 'px',
         height: heightPx + 'px',
         conflictCount,
-        conflictLane: conflictCount ? c.conflictLane : 0,
-        conflictLanes,
-        layoutLeft: `calc(${(conflictCount ? c.conflictLane : 0) * 100 / conflictLanes}% + 1.5px)`,
-        layoutWidth: `calc(${100 / conflictLanes}% - 3px)`,
+        conflictLane: placed.lane,
+        conflictLanes: placed.lanes,
+        layoutLeft: `calc(${placed.lane * 100 / placed.lanes}% + 1.5px)`,
+        layoutWidth: `calc(${100 / placed.lanes}% - 3px)`,
         palette: getPalette(c.name),
         shortRoom: cleanRoomShort(c.room),
         formattedRoom: formatRoomBadge(c.room),
@@ -1207,6 +1239,7 @@ const dayBlocks = computed(() => {
 const visibleDayCourses = computed(() => {
   return dayBlocks.value[activeDay.value] || []
 })
+const readableWeekCourses = computed(() => dayBlocks.value.slice(0, visibleWeekdays.value.length).flat())
 
 function countConflictingCourses(courses) {
   return courses.filter(course => course.conflictCount > 0).length
@@ -1417,6 +1450,7 @@ function saveCustomCourse() {
     showToast(`请检查开始周和结束周（1 至 ${maxTeachingWeek.value} 周）`)
     return false
   }
+  const swappedPeriods = newSchedule.startPeriod > newSchedule.endPeriod
   const s = Math.min(newSchedule.startPeriod, newSchedule.endPeriod)
   const e = Math.max(newSchedule.startPeriod, newSchedule.endPeriod)
   const nums = []
@@ -1440,10 +1474,10 @@ function saveCustomCourse() {
       ? Number(editingScheduleId.value.slice('legacy-index:'.length))
       : editingScheduleId.value
     store.updateCustomCourse(id, item)
-    showToast('日程已更新')
+    showToast(swappedPeriods ? '已按较早节次到较晚节次保存' : '日程已更新')
   } else {
     store.addCustomCourse(item)
-    showToast('日程添加成功')
+    showToast(swappedPeriods ? '已按较早节次到较晚节次保存' : '日程添加成功')
   }
   return true
 }
@@ -1523,9 +1557,10 @@ async function exportScheduleTableImage() {
   }
   showToast({ message: '正在生成课表图片...', duration: 0, forbidClick: true })
   try {
+    const { default: html2canvas } = await import('html2canvas')
     const canvas = await html2canvas(el, {
       backgroundColor: '#FFFFFF',
-      scale: 2,
+      scale: (navigator.hardwareConcurrency || 8) <= 4 ? 1 : 2,
       useCORS: true,
       logging: false,
       foreignObjectRendering: false
@@ -1693,6 +1728,20 @@ onMounted(async () => {
   })
 })
 
+onDeactivated(() => {
+  showWeekPickerSheet.value = false
+  showMoreMenu.value = false
+  showSemesterSheet.value = false
+  showDensitySheet.value = false
+  showThemeSheet.value = false
+  showAddScheduleDialog.value = false
+  showDeleteScheduleDialog.value = false
+  showListExportDialog.value = false
+  showImageExportDialog.value = false
+  showLoginDialog.value = false
+  detailVisible.value = false
+})
+
 onUnmounted(() => {
   if (typeof window === 'undefined') return
   window.removeEventListener('resize', measureViewport)
@@ -1704,7 +1753,7 @@ onUnmounted(() => {
 .schedule-page {
   max-width: 640px;
   margin: 0 auto;
-  padding: calc(var(--safe-top, 0px) + 12px) 12px var(--dock-clearance, 82px);
+  padding: calc(var(--safe-top, 0px) + 12px) 12px calc(var(--dock-clearance, 82px) + 8px);
   position: relative;
 }
 
@@ -1736,6 +1785,7 @@ onUnmounted(() => {
   flex: 0 0 auto;
   border: 0;
   border-radius: 7px;
+  min-height: 44px;
   padding: 6px 10px;
   background: var(--primary, #007AFF);
   color: #fff;
@@ -1747,6 +1797,29 @@ onUnmounted(() => {
   margin: 10px 2px 0;
   color: #8B4A16;
   background: rgba(255, 149, 0, 0.11);
+}
+
+.week-readout {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  background: var(--bg-surface, #fff);
+  border-radius: 12px;
+}
+.week-readout li {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 2px 8px;
+  padding: 10px 12px;
+  border-top: 0.5px solid var(--separator, rgba(60, 60, 67, 0.12));
+  font-size: 13px;
+}
+.week-readout li span:first-child {
+  grid-row: span 2;
+  color: var(--text-secondary, #62626a);
+}
+.week-readout strong {
+  font-size: 15px;
 }
 
 /* Dedicated single-token probes to resolve CSS variables into computed pixels without padding interference */
@@ -2082,7 +2155,7 @@ onUnmounted(() => {
 }
 
 .periods-time-rail {
-  width: 34px;
+  width: 40px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -2112,8 +2185,8 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   margin-top: 2px;
-  font-size: 8px;
-  color: var(--text-tertiary, #C7C7CC);
+  font-size: 11px;
+  color: var(--text-secondary, #62626a);
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
@@ -2509,7 +2582,7 @@ onUnmounted(() => {
 .days-toggle button {
   border: 0;
   border-radius: 7px;
-  min-height: 30px;
+  min-height: 44px;
   padding: 0 9px;
   background: transparent;
   color: var(--text-secondary, #6e6e73);

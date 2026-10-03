@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/app'
 const routes = [
   {
     path: '/',
-    redirect: '/schedule'
+    redirect: '/home'
   },
   {
     path: '/login',

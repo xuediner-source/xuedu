@@ -8,3 +8,14 @@ export function courseTitleLayout(height, roomHeight, fontSize = 11, roomLineHei
   const lines = Math.max(1, Math.floor(available / lineHeight))
   return { lines, lineHeight, maxHeight: lines * lineHeight, roomLines, reservedRoom }
 }
+
+// Width uses only the lanes that overlap this course, not every lane used later that day.
+export function laneSpan(course, courses) {
+  const overlapping = (Array.isArray(courses) ? courses : []).filter(other =>
+    Number(course?.secStart) <= Number(other?.secEnd) && Number(other?.secStart) <= Number(course?.secEnd)
+  )
+  if (overlapping.length <= 1) return { lane: 0, lanes: 1 }
+  const lane = Number(course?.conflictLane) || 0
+  const lanes = Math.max(...overlapping.map(other => Number(other?.conflictLane) || 0)) + 1
+  return { lane, lanes: Math.max(lanes, lane + 1) }
+}

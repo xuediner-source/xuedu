@@ -1,14 +1,13 @@
 <template>
   <div class="page-container program-page">
     <header class="cw-top-nav">
-      <button class="nav-icon-btn" @click="closeToWidget">
+      <button class="nav-icon-btn" type="button" aria-label="返回" @click="closeToWidget">
         <Icon name="arrow-left" :size="20" color="#161513" />
       </button>
       <div class="nav-title-col">
-        <p class="xd-kicker">XD-PROG</p>
         <h1 class="nav-title">培养方案</h1>
       </div>
-      <button class="nav-icon-btn" @click="refresh">
+      <button class="nav-icon-btn" type="button" aria-label="刷新" :disabled="loading" @click="refresh">
         <Icon name="refresh" :size="18" color="#8A8278" />
       </button>
     </header>
@@ -21,6 +20,10 @@
       </div>
       <h2 class="summary-title">{{ planTitle }}</h2>
       <p class="summary-meta" v-if="collegeText">{{ collegeText }}</p>
+      <p v-if="courses.length && (errorMsg || store.sessionExpired)" class="summary-warn">
+        {{ store.sessionExpired ? '登录已过期，当前显示上次同步的培养方案' : errorMsg }}
+      </p>
+      <button v-if="courses.length && store.sessionExpired" class="retry-link" type="button" @click="router.push('/login')">重新登录</button>
 
       <div class="summary-stats" v-if="courses.length">
         <div class="stat-box">
@@ -61,8 +64,9 @@
     <!-- Empty -->
     <div v-else-if="!courses.length" class="empty-state">
       <Icon name="book" :size="32" color="#B4ADA3" />
-      <p>{{ errorMsg || '暂未查询到该专业的培养方案课程' }}</p>
-      <span class="empty-sub">教务系统暂未发布完整的课程设置总表</span>
+      <p>{{ store.sessionExpired ? '登录已过期' : (errorMsg || '暂未查询到该专业的培养方案课程') }}</p>
+      <span class="empty-sub">{{ errorMsg || store.sessionExpired ? '点右上角刷新重试' : '教务系统暂未发布完整的课程设置总表' }}</span>
+      <button v-if="store.sessionExpired" class="retry-link" type="button" @click="router.push('/login')">重新登录</button>
     </div>
 
     <!-- Course Groups -->
@@ -238,7 +242,7 @@ onMounted(async () => {
 .program-page {
   max-width: 600px;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 12px) 16px 28px;
+  padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 28px);
 }
 .cw-top-nav {
   display: flex;
@@ -247,9 +251,19 @@ onMounted(async () => {
   padding: 4px 2px;
   margin-bottom: 14px;
 }
+.retry-link {
+  margin-top: 10px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 16px;
+  background: var(--primary, #007aff);
+  color: #fff;
+  font: inherit;
+}
 .nav-icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card-solid);
@@ -309,6 +323,12 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+}
+.summary-warn {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #9A3412;
 }
 .summary-stats {
   display: grid;

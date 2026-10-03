@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   resolveHomeAgenda,
+  previewNextTeachingWeek,
   parseTimeToMinutes,
   getWeekdayIndex,
   calcWeekNumber,
@@ -98,6 +99,21 @@ test('returns null heroCourse and empty laterCourses when all week courses have 
   assert.equal(agenda.heroCourse, null)
   assert.equal(agenda.laterCourses.length, 0)
   assert.equal(agenda.totalWeekCourses, 5)
+
+  const next = previewNextTeachingWeek({
+    courses: mockCourses,
+    currentWeek: 1,
+    weekdayIndex: 4,
+    now: 960
+  })
+  assert.equal(next.name, '高等数学B（上）')
+  assert.equal(next.displayWhen, '下周一')
+  assert.equal(next.statusText, '下周')
+  assert.equal(previewNextTeachingWeek({
+    courses: mockCourses,
+    currentWeek: 1,
+    isCourseInWeek: () => false
+  }), null)
 })
 
 test('midnight crossing simulation (23:59:50 -> 00:00:10): date, weekday, and agenda transition cleanly', () => {

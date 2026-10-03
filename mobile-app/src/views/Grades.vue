@@ -8,7 +8,7 @@
       <div class="header-main">
         <h1 class="page-title">课程成绩</h1>
       </div>
-      <button class="action-chip" @click="refresh" aria-label="刷新成绩">
+      <button class="action-chip" type="button" :disabled="store.gradesLoading" @click="refresh" aria-label="刷新成绩">
         <Icon name="refresh" :size="16" color="#007AFF" />
         <span>刷新</span>
       </button>
@@ -23,12 +23,22 @@
       <span class="empty-sub">正在查询教务成绩</span>
     </div>
 
+    <div v-else-if="gradesBlocked" class="empty-state">
+      <div class="empty-icon state-icon-box">
+        <Icon name="grades" :size="36" color="var(--primary)" />
+      </div>
+      <p>{{ store.sessionExpired ? '登录已过期' : store.gradesError }}</p>
+      <span class="empty-sub">{{ store.sessionExpired ? '已保存的成绩仍会在重新登录后显示' : '请点重试，不会把失败当成没有成绩' }}</span>
+      <button v-if="store.sessionExpired" class="action-chip" type="button" @click="router.push('/login')">重新登录</button>
+      <button v-else class="action-chip" type="button" :disabled="store.gradesLoading" @click="refresh">重试</button>
+    </div>
+
     <template v-else>
       <!-- Academic Summary Card: 白分组，不是玻璃仪表 -->
-      <section class="summary-card">
+      <section v-if="store.grades.length" class="summary-card">
         <div class="summary-header">
           <h2 class="summary-title">学业总评</h2>
-          <span class="summary-update">已同步最新考评</span>
+          <span class="summary-update">{{ summaryNote }}</span>
         </div>
 
         <div class="summary-grid">
@@ -88,15 +98,15 @@
         <div class="empty-icon state-icon-box">
           <Icon name="grades" :size="36" color="var(--primary)" />
         </div>
-        <p>暂无符合条件的课程成绩</p>
-        <span class="empty-sub">新学期成绩录入后将自动同步</span>
+        <p>{{ store.grades.length ? '暂无符合条件的课程成绩' : '暂无已同步的课程成绩' }}</p>
+        <span class="empty-sub">{{ store.grades.length ? '换一个学期再看' : '教务录入后，点刷新同步' }}</span>
       </div>
 
       <!-- Grade Cards List: Inset Grouped 整组白面与发丝分隔 -->
       <div class="grades-grouped-card" v-else>
         <div
           v-for="(g, i) in filteredGrades"
-          :key="i"
+          :key="gradeKey(g, i)"
           class="grade-list-row"
           @click="showGradeDetail(g)"
           role="button"
@@ -133,6 +143,7 @@ import { useAppStore } from '@/store/app'
 import { showDialog } from 'vant'
 import { showToast } from '@/utils/appToast'
 import Icon from '@/components/Icon.vue'
+import { summarizeGrades } from '@/utils/gradeSummary.js'
 import { useWidgetPage } from '@/composables/useWidgetPage'
 import { widgetExpand } from '@/composables/useWidgetExpand'
 
@@ -148,67 +159,37 @@ function currentGrades() {
   return filteredGrades.value
 }
 
+const gradeSummary = computed(() => summarizeGrades(currentGrades()))
+const gradesBlocked = computed(() => !store.grades.length && !!(store.gradesError || store.sessionExpired))
+const summaryNote = computed(() => {
+  if (store.sessionExpired) return '登录已过期，显示上次成功同步的成绩'
+  if (store.gradesError) return store.gradesError
+  return '以下为已加载成绩的估算，不是教务官方绩点'
+})
 const stats = computed(() => {
-  const source = currentGrades()
-  let total = source.length
-  let credits = 0
-  let sum = 0
-  let count = 0
-  let passed = 0
-  let gpaWeight = 0
-  let gpaCredits = 0
-
-  source.forEach(g => {
-    const c = parseFloat(g.credit) || 0
-    credits += c
-    const s = parseFloat(g.score)
-    if (!isNaN(s)) {
-      sum += s
-      count++
-      if (s >= 60) passed++
-    }
-    const gp = parseFloat(g.gpa)
-    if (!isNaN(gp) && c > 0) {
-      gpaWeight += gp * c
-      gpaCredits += c
-    } else if (!isNaN(gp)) {
-      gpaWeight += gp
-      gpaCredits += 1
-    }
-  })
-
-  const avg = count > 0 ? (sum / count) : 0
-  const gpa = gpaCredits > 0 ? (gpaWeight / gpaCredits) : 0
-
+  const summary = gradeSummary.value
   return {
-    totalCourses: total,
-    totalCredits: credits.toFixed(1),
-    average: avg.toFixed(1),
-    gpa: gpa.toFixed(2),
-    passed: passed + '/' + total
+    totalCourses: summary.total,
+    totalCredits: summary.credits.toFixed(1),
+    average: summary.average == null ? '--' : summary.average.toFixed(1),
+    gpa: summary.gpa == null ? '--' : summary.gpa.toFixed(2),
+    passed: summary.passed + '/' + summary.total
   }
 })
 
 const creditByNature = computed(() => {
-  const source = currentGrades()
-  const map = new Map()
-  let total = 0
-  source.forEach(g => {
-    const name = String(g.courseNature || g.courseAttr || '未分类').trim() || '未分类'
-    const c = parseFloat(g.credit) || 0
-    const cur = map.get(name) || { name, credits: 0, count: 0 }
-    cur.credits += c
-    cur.count += 1
-    map.set(name, cur)
-    total += c
-  })
-  const rows = Array.from(map.values()).sort((a, b) => b.credits - a.credits)
-  return rows.map(r => ({
-    ...r,
-    credits: r.credits.toFixed(1).replace(/\.0$/, ''),
-    pct: total > 0 ? Math.max(6, Math.round((r.credits / total) * 100)) : 0
+  const rows = gradeSummary.value.byNature
+  const total = rows.reduce((sum, row) => sum + row.credits, 0)
+  return rows.map(row => ({
+    ...row,
+    credits: row.credits.toFixed(1).replace(/\.0$/, ''),
+    pct: total > 0 ? Math.max(6, Math.round((row.credits / total) * 100)) : 0
   }))
 })
+
+function gradeKey(grade, index) {
+  return [grade.courseCode || grade.courseName || 'course', grade.semester || '', grade.score || '', index].join('-')
+}
 
 function filterGrades() {
   if (semesterIndex.value === 0) {
@@ -258,7 +239,7 @@ onMounted(() => {
 .grades-page {
   max-width: 640px;
   margin: 0 auto;
-  padding: calc(var(--safe-top, 0px) + 12px) 16px var(--dock-clearance, 82px);
+  padding: calc(var(--safe-top, 0px) + 12px) 16px calc(var(--dock-clearance, 82px) + 8px);
 }
 
 /* Apple HIG Page Header */
@@ -304,7 +285,8 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 34px;
+  min-height: 44px;
+  height: 44px;
   padding: 0 14px;
   border-radius: 999px;
   border: none;
@@ -318,6 +300,9 @@ onMounted(() => {
 }
 .action-chip:active {
   opacity: 0.7;
+}
+.action-chip:disabled {
+  opacity: 0.45;
 }
 
 /* Loading & Empty State */

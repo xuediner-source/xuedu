@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { courseTitleLayout } from './courseCardLayout.js'
+import { courseTitleLayout, laneSpan } from './courseCardLayout.js'
 
 test('title and classroom do not overlap for one, two and three period cards across all font sizes', () => {
   for (const height of [34, 74, 110, 168]) {
@@ -32,6 +32,22 @@ test('12px prioritized font layout provides readable 2-line title and classroom 
   assert.ok(layout.lines >= 1)
   assert.equal(layout.reservedRoom, 21.6)
   assert.ok(layout.maxHeight + layout.reservedRoom + 4 <= 74 - 8 + 0.01)
+})
+
+test('morning collisions stay half width when the afternoon uses more lanes', () => {
+  const morning = [
+    { secStart: 1, secEnd: 2, conflictLane: 0 },
+    { secStart: 1, secEnd: 2, conflictLane: 1 }
+  ]
+  const afternoon = [
+    { secStart: 6, secEnd: 7, conflictLane: 0 },
+    { secStart: 6, secEnd: 7, conflictLane: 1 },
+    { secStart: 6, secEnd: 7, conflictLane: 2 }
+  ]
+  const day = [...morning, ...afternoon]
+  assert.deepEqual(laneSpan(morning[0], day), { lane: 0, lanes: 2 })
+  assert.deepEqual(laneSpan(afternoon[2], day), { lane: 2, lanes: 3 })
+  assert.deepEqual(laneSpan(morning[0], [morning[0]]), { lane: 0, lanes: 1 })
 })
 
 test('13px scaled font layout prevents title and classroom collision on multi-period cards', () => {

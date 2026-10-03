@@ -13,7 +13,7 @@
       <div class="profile-meta-col">
         <h2 class="student-name-text">{{ store.studentName || '同学' }}</h2>
         <p class="college-role-sub">{{ cardSubLine }}</p>
-        <p class="campus-sub-tag">{{ store.campus === 'nanan' ? '南岸校区' : '科学城校区' }}</p>
+        <p class="campus-sub-tag">天气校区：{{ store.campus === 'nanan' ? '南岸' : '科学城' }}</p>
       </div>
       <div class="hero-card-arrow">
         <span class="card-detail-hint">详细资料</span>
@@ -21,8 +21,35 @@
       </div>
     </section>
 
-    <!-- 组 1：教务数据与会话 -->
-    <div class="group-section-title">教务数据与会话</div>
+    <div class="group-section-title">常用</div>
+    <div class="inset-grouped-box">
+      <div class="inset-list-row" @click="router.push('/program')">
+        <div class="inset-row-left">
+          <div class="inset-row-text"><span class="row-main-title">培养方案</span></div>
+        </div>
+        <Icon name="chevron-right" :size="14" color="#8E8E93" />
+      </div>
+      <div class="inset-list-row" @click="router.push('/classrooms')">
+        <div class="inset-row-left">
+          <div class="inset-row-text"><span class="row-main-title">空闲教室</span></div>
+        </div>
+        <Icon name="chevron-right" :size="14" color="#8E8E93" />
+      </div>
+      <div class="inset-list-row" @click="router.push('/assistant')">
+        <div class="inset-row-left">
+          <div class="inset-row-text"><span class="row-main-title">学渡助手</span></div>
+        </div>
+        <Icon name="chevron-right" :size="14" color="#8E8E93" />
+      </div>
+      <div class="inset-list-row" @click="router.push('/calendar-weather')">
+        <div class="inset-row-left">
+          <div class="inset-row-text"><span class="row-main-title">校历与天气</span></div>
+        </div>
+        <Icon name="chevron-right" :size="14" color="#8E8E93" />
+      </div>
+    </div>
+
+    <div class="group-section-title">教务数据</div>
     <div class="inset-grouped-box">
       <div class="inset-list-row" @click="clearLocalData">
         <div class="inset-row-left">
@@ -54,7 +81,9 @@
           </div>
         </div>
         <div class="inset-row-right">
-          <span v-if="hasUpdate" class="badge-new-ver">发现新版本</span>
+          <span v-if="updateCheck === 'available'" class="badge-new-ver">发现新版本</span>
+          <span v-else-if="updateCheck === 'failed'" class="badge-latest">检查失败</span>
+          <span v-else-if="updateCheck === 'checking'" class="badge-latest">正在检查</span>
           <span v-else class="badge-latest">已是最新</span>
           <Icon name="chevron-right" :size="14" color="#8E8E93" />
         </div>
@@ -78,12 +107,9 @@
       <!-- 破坏性退出登录（明确红色，标准 iOS 危险操作行） -->
       <div class="inset-list-row destructive-row" @click="handleLogout">
         <div class="inset-row-left">
-          <div class="inset-row-icon icon-danger">
-            <Icon name="arrow-left" :size="16" color="#FFFFFF" />
-          </div>
           <div class="inset-row-text">
             <span class="row-main-title text-danger">退出登录</span>
-            <span class="row-sub-title text-danger-sub">注销教务会话并清除教务缓存</span>
+            <span class="row-sub-title text-danger-sub">退出并清除本机教务缓存</span>
           </div>
         </div>
         <div class="inset-row-right">
@@ -95,7 +121,7 @@
     <!-- 极简 Apple 风格页脚 -->
     <footer class="profile-footnote">
       <p class="footnote-meta">
-        <span>{{ store.campus === 'nanan' ? '南岸校区' : '科学城校区' }}</span>
+        <span>天气校区：{{ store.campus === 'nanan' ? '南岸' : '科学城' }}</span>
         <span class="footnote-sep">·</span>
         <span>课表 {{ store.courses?.length || 0 }} 门</span>
         <span class="footnote-sep">·</span>
@@ -117,6 +143,7 @@ import { useInAppUpdate } from '@/composables/useInAppUpdate'
 import { formatAppVersion, getNativeAppInfo, isUpdateAvailable } from '@/utils/apkUpdate'
 
 const router = useRouter()
+const updateCheck = ref('checking')
 const store = useAppStore()
 const update = useInAppUpdate()
 
@@ -186,12 +213,14 @@ async function onCheckUpdateClick() {
   const current = { versionName: currentAppVersion.value, versionCode: currentAppVersionCode.value }
   const info = await store.checkUpdate(current.versionName, current.versionCode)
   if (!info || !info.success) {
+    updateCheck.value = 'failed'
     showToast('检查更新失败，请确认网络连接')
     return
   }
 
   if (isUpdateAvailable(current, info)) {
     hasUpdate.value = true
+    updateCheck.value = 'available'
     pendingUpdate.value = info
     showDialog({
       title: '发现新版本 ' + formatAppVersion(info.latestVersion),
@@ -205,6 +234,7 @@ async function onCheckUpdateClick() {
     }).catch(() => {})
   } else {
     hasUpdate.value = false
+    updateCheck.value = 'latest'
     pendingUpdate.value = null
     showToast('暂无可用更新')
   }
@@ -214,13 +244,18 @@ async function checkAppUpdate(autoCheck = false) {
   await resolveCurrentAppVersion()
   const current = { versionName: currentAppVersion.value, versionCode: currentAppVersionCode.value }
   const info = await store.checkUpdate(current.versionName, current.versionCode)
-  if (!info || !info.success) return
+  if (!info || !info.success) {
+    updateCheck.value = 'failed'
+    return
+  }
 
   if (isUpdateAvailable(current, info)) {
     hasUpdate.value = true
+    updateCheck.value = 'available'
     pendingUpdate.value = info
   } else {
     hasUpdate.value = false
+    updateCheck.value = 'latest'
     pendingUpdate.value = null
   }
 }
@@ -270,7 +305,7 @@ onMounted(async () => {
 .profile-page {
   max-width: 600px;
   margin: 0 auto;
-  padding: calc(var(--safe-top, 0px) + 16px) 16px var(--dock-clearance, 100px);
+  padding: calc(var(--safe-top, 0px) + 16px) 16px calc(var(--dock-clearance, 100px) + 8px);
 }
 
 .profile-header {

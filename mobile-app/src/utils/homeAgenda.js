@@ -164,3 +164,27 @@ export function resolveHomeAgenda({
     totalWeekCourses: inWeekCourses.length
   }
 }
+
+/**
+ * 本周剩余课程为空时，预告下一教学周的第一节。不回退到本周已经结束的课。
+ */
+export function previewNextTeachingWeek(options = {}) {
+  const currentWeek = Number(options.currentWeek)
+  if (!Number.isFinite(currentWeek) || currentWeek < 1) return null
+  const preview = resolveHomeAgenda({
+    ...options,
+    currentWeek: currentWeek + 1,
+    weekdayIndex: -1,
+    now: 0
+  })
+  if (!preview.heroCourse) return null
+  const day = preview.heroCourse.day || ''
+  const displayWhen = day.startsWith('周') ? `下${day}` : (day ? `下周${day}` : '下周')
+  return {
+    ...preview.heroCourse,
+    isToday: false,
+    isOngoing: false,
+    statusText: '下周',
+    displayWhen
+  }
+}

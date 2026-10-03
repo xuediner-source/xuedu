@@ -4,7 +4,7 @@
       <div class="header-main">
         <h1 class="page-title">考试日程</h1>
       </div>
-      <button class="action-chip" @click="refresh" aria-label="刷新考试安排">
+      <button class="action-chip" type="button" :disabled="store.examLoading" @click="refresh" aria-label="刷新考试安排">
         <Icon name="refresh" :size="16" color="#007AFF" />
         <span>刷新</span>
       </button>
@@ -24,7 +24,7 @@
       <section class="overview-card">
         <div class="overview-header">
           <h2 class="overview-title">考务总览</h2>
-          <span class="overview-update">正在考试 {{ examStats.ongoing }} 门</span>
+          <span class="overview-update">{{ examStats.ongoing ? `正在考试 ${examStats.ongoing} 门` : (store.examError || store.sessionExpired ? '显示上次同步的安排' : '考务安排') }}</span>
         </div>
         <div class="overview-grid">
           <div class="overview-item">
@@ -89,13 +89,23 @@
       </div>
     </template>
 
+    <div v-else-if="store.examError || store.sessionExpired" class="empty-state">
+      <div class="empty-icon state-icon-box">
+        <Icon name="exam" :size="36" color="var(--primary)" />
+      </div>
+      <p>{{ store.sessionExpired ? '登录已过期' : store.examError }}</p>
+      <span class="empty-sub">请重试。失败不等于这学期没有考试。</span>
+      <button v-if="store.sessionExpired" class="action-chip" type="button" @click="router.push('/login')">重新登录</button>
+      <button v-else class="action-chip" type="button" :disabled="store.examLoading" @click="refresh">重试</button>
+    </div>
+
     <!-- Empty state -->
     <div v-else class="empty-state">
       <div class="empty-icon state-icon-box">
         <Icon name="exam" :size="36" color="var(--primary)" />
       </div>
       <p>暂无待参加的考试安排</p>
-      <span class="empty-sub">教务排考录入后，考场、座次将第一时间在此呈现</span>
+      <span class="empty-sub">教务排考录入后，考场、座次将在此呈现</span>
     </div>
   </div>
 </template>
@@ -107,7 +117,7 @@ import { useAppStore } from '@/store/app'
 import { showDialog } from 'vant'
 import { showToast } from '@/utils/appToast'
 import Icon from '@/components/Icon.vue'
-import { getExamDateDistance, getExamStatus as resolveExamStatus } from '@/utils/examTime'
+import { getExamDateDistance, getExamStatus as resolveExamStatus, parseExamTimeRange } from '@/utils/examTime'
 
 const router = useRouter()
 const store = useAppStore()
@@ -137,9 +147,12 @@ const examStats = computed(() => {
 
 const sortedExams = computed(() => {
   return [...store.exams].sort((a, b) => {
-    const dateA = a.examTime || ''
-    const dateB = b.examTime || ''
-    return dateA.localeCompare(dateB)
+    const startA = parseExamTimeRange(a.examTime).startAt
+    const startB = parseExamTimeRange(b.examTime).startAt
+    if (!startA && !startB) return 0
+    if (!startA) return 1
+    if (!startB) return -1
+    return startA.getTime() - startB.getTime()
   })
 })
 
@@ -190,7 +203,7 @@ onMounted(() => {
 .exam-page {
   max-width: 640px;
   margin: 0 auto;
-  padding: calc(var(--safe-top, 0px) + 12px) 16px var(--dock-clearance, 82px);
+  padding: calc(var(--safe-top, 0px) + 12px) 16px calc(var(--dock-clearance, 82px) + 8px);
 }
 
 .page-header {
@@ -218,7 +231,8 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 34px;
+  min-height: 44px;
+  height: 44px;
   padding: 0 14px;
   border-radius: 999px;
   border: none;
@@ -232,6 +246,9 @@ onMounted(() => {
 }
 .action-chip:active {
   opacity: 0.7;
+}
+.action-chip:disabled {
+  opacity: 0.45;
 }
 
 /* Loading & Empty State */

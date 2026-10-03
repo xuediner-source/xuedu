@@ -1040,7 +1040,7 @@ app.get("/api/profile", async (req, res) => {
     const major = info["专业"] || info["专业名称"] || "";
     const className = info["班级"] || "";
     const enrollDate = info["入学日期"] || info["入学年份"] || info["年级"] || "";
-    const enrollYear = enrollDate.match(/(20\d{2})/)?.[1] || guessEnrollYear(enrollDate, studentId) || "2026";
+    const enrollYear = enrollDate.match(/(20\d{2})/)?.[1] || guessEnrollYear(enrollDate, studentId) || "";
     const studentName = info["姓名"] || rec.studentName || "";
 
     const profile = {
@@ -1454,6 +1454,9 @@ app.get("/api/classrooms", async (req, res) => {
 
 // 空闲教室诊断端点：用真实会话跑一次查询，返回结构信息，便于定位教务返回的表格式
 app.get("/api/classrooms/debug", async (req, res) => {
+  if (process.env.CLASSROOM_DEBUG !== "1") {
+    return res.status(404).json({ success: false, message: "未开放" });
+  }
   try {
     const sessionId = req.query.sessionId || req.headers["x-session-id"];
     const rec = getSession(sessionId);

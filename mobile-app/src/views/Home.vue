@@ -6,28 +6,29 @@
       <span class="large-title-sub">{{ todayDateLabel }} · {{ displayWeekLabel }}</span>
     </header>
     <ScheduleSyncStatus :synced-at="store.scheduleSyncedAt" :loading="store.scheduleLoading" :offline="store.isOffline" :error="store.scheduleError" :session-expired="store.sessionExpired" @login="goPlain('/login')" />
+    <p v-if="holidayNotice" class="holiday-notice">{{ holidayNotice }}</p>
 
     <!-- 3. 下一节课：唯一英雄模块 (Hero Up-Next) -->
     <section
-      v-if="heroCourse"
+      v-if="displayHero"
       class="hero-next-course-box"
       role="button"
       tabindex="0"
-      :aria-label="`下一节课：${heroCourse.name}，时间 ${heroCourse.periodTime}，地点 ${heroCourse.shortRoom || heroCourse.room || '教室待定'}`"
+      :aria-label="`下一节课：${displayHero.name}，时间 ${displayHero.periodTime}，地点 ${displayHero.shortRoom || displayHero.room || '教室待定'}`"
       @click="openFromCard($event, 'schedule')"
       @keydown.enter.self.prevent="openFromCard($event, 'schedule')"
       @keydown.space.self.prevent="openFromCard($event, 'schedule')"
     >
       <div class="hero-next-kicker">
         <span class="hero-pulse-dot" aria-hidden="true"></span>
-        <span>{{ heroCourse.isOngoing ? '正在进行' : '下一节' }} · {{ heroCourse.statusText }}</span>
+        <span>{{ displayHero.isOngoing ? '正在进行' : '下一节' }} · {{ displayHero.statusText }}</span>
       </div>
-      <h2 class="hero-course-title-big">{{ heroCourse.name }}</h2>
-      <div class="hero-course-time-line">{{ heroCourse.displayWhen }} {{ heroCourse.periodTime }}</div>
+      <h2 class="hero-course-title-big">{{ displayHero.name }}</h2>
+      <div class="hero-course-time-line">{{ displayHero.displayWhen }} {{ displayHero.periodTime }}</div>
       <div class="hero-course-room-line">
         <Icon name="location" :size="14" color="var(--accent)" />
-        <span class="hero-room-span">{{ heroCourse.shortRoom || heroCourse.room || '教室待定' }}</span>
-        <span class="hero-teacher-span" v-if="heroCourse.teacher">· {{ heroCourse.teacher }}</span>
+        <span class="hero-room-span">{{ displayHero.shortRoom || displayHero.room || '教室待定' }}</span>
+        <span class="hero-teacher-span" v-if="displayHero.teacher">· {{ displayHero.teacher }}</span>
       </div>
     </section>
 
@@ -45,8 +46,8 @@
       <van-loading v-if="store.scheduleLoading && !store.allCourses.length" size="22px" />
       <template v-else>
         <div class="empty-kicker-text">今日课表</div>
-        <h2 class="empty-title-text">{{ displayWeek === null ? '教学周尚未确认' : store.scheduleError && !store.allCourses.length ? '暂时无法获取课表' : weekCourseCount ? '本周待上课程已全部结束' : '本周暂无课程安排' }}</h2>
-        <p class="empty-sub-text">{{ displayWeek === null ? '请同步学期校历后查看课程安排' : '今天没有待上课程' }}</p>
+        <h2 class="empty-title-text">{{ emptyTitle }}</h2>
+        <p class="empty-sub-text">{{ emptySubtitle }}</p>
         <span class="empty-link-btn">查看完整课表 ›</span>
       </template>
     </section>
@@ -130,7 +131,9 @@
     <section class="caption-glance-bar" aria-label="学业速览">
       <div class="caption-items-group">
         <button class="caption-chip-btn" type="button" @click="openFromCard($event, 'schedule')">
-          本周<b>{{ weekCourseCount }}</b>节
+          <template v-if="displayWeek === null">教学周待确认</template>
+          <template v-else-if="displayWeek < 1">尚未开学</template>
+          <template v-else>本周<b>{{ weekCourseCount }}</b>次</template>
         </button>
         <span class="caption-dot-sep">·</span>
         <button class="caption-chip-btn" type="button" @click="openFromCard($event, 'grades')">
@@ -223,6 +226,7 @@ import { getExamStatus } from '@/utils/examTime.js'
 import { openWidget, clearWidgetOrigin } from '@/composables/useWidgetExpand'
 import {
   resolveHomeAgenda,
+  previewNextTeachingWeek,
   getWeekdayIndex,
   formatTodayDate
 } from '@/utils/homeAgenda'
@@ -244,7 +248,10 @@ const campusOptions = [
 ]
 
 const weatherTemp = computed(() => store.weather?.temperature ?? '--')
-const weatherText = computed(() => store.weather?.text || '同步中…')
+const weatherText = computed(() => {
+  if (store.weather?.text) return store.weather.text
+  return store.weatherLoading ? '同步中…' : '未同步'
+})
 const weatherRange = computed(() => {
   const day = store.weather?.days?.[0]
   if (!day || day.tmax == null) return ''
@@ -253,7 +260,10 @@ const weatherRange = computed(() => {
 
 const nextCalendarText = computed(() => {
   const ev = store.calendar?.upcoming?.[0]
-  if (!ev) return store.calendar ? '按自己的节奏，安排好这一周' : '校历同步中…'
+  if (!ev) {
+    if (store.calendarLoading && !store.calendar) return '校历同步中…'
+    return store.calendar ? '按自己的节奏，安排好这一周' : '校历未同步'
+  }
   if (ev.date === ev.endDate) return `${ev.date.slice(5)} ${ev.title}`
   return `${ev.date.slice(5)}–${String(ev.endDate).slice(5)} ${ev.title}`
 })
@@ -267,7 +277,39 @@ const weekCourseCount = computed(() => {
   return store.allCourses.filter(c => store.isCourseInWeek(c, displayWeek.value)).length
 })
 
-const pendingExamCount = computed(() => store.exams.filter(exam => getExamStatus(exam.examTime, currentClock.value) !== 'passed').length)
+const pendingExamCount = computed(() => store.exams.filter(exam => {
+  const status = getExamStatus(exam.examTime, currentClock.value)
+  return status === 'pending' || status === 'ongoing'
+}).length)
+
+function localIso(date) {
+  const value = date instanceof Date ? date : new Date()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${value.getFullYear()}-${month}-${day}`
+}
+
+const holidayNotice = computed(() => {
+  const events = Array.isArray(store.calendar?.events) ? store.calendar.events : []
+  const today = localIso(currentClock.value)
+  const hit = events.find(event => event?.date && today >= event.date && today <= (event.endDate || event.date) && (event.type === 'holiday' || event.type === 'vacation'))
+  if (!hit) return ''
+  return `校历标注：${hit.title}。课表仍显示教务安排，放假以学校通知为准。`
+})
+
+const emptyTitle = computed(() => {
+  if (displayWeek.value === null) return '教学周尚未确认'
+  if (store.scheduleError && !store.allCourses.length) return '暂时无法获取课表'
+  if (weekCourseCount.value) return '本周待上课程已全部结束'
+  return '本周暂无课程安排'
+})
+
+const emptySubtitle = computed(() => {
+  if (displayWeek.value === null) return '请同步学期校历后查看课程安排'
+  if (store.scheduleError && !store.allCourses.length) return store.scheduleError
+  if (weekCourseCount.value) return '下一周的课在完整课表里'
+  return '同步成功后，课程会显示在这里'
+})
 
 // 使用真实教学周与时间计算真正的下一节课与之后日程（完全依赖 currentClock，跨午夜/跨周自适应）
 const agenda = computed(() => {
@@ -282,6 +324,18 @@ const agenda = computed(() => {
 })
 
 const heroCourse = computed(() => agenda.value.heroCourse)
+const nextWeekHero = computed(() => {
+  if (heroCourse.value || displayWeek.value == null || displayWeek.value < 1) return null
+  return previewNextTeachingWeek({
+    courses: store.allCourses,
+    currentWeek: displayWeek.value,
+    weekdayIndex: todayIdx.value,
+    now: currentClock.value,
+    isCourseInWeek: store.isCourseInWeek,
+    courseTime: store.courseTime
+  })
+})
+const displayHero = computed(() => heroCourse.value || nextWeekHero.value)
 const laterCourses = computed(() => agenda.value.laterCourses)
 
 function openFromCard(evt, page, focus = '') {
@@ -322,7 +376,7 @@ onMounted(() => {
 .home-page {
   max-width: 600px;
   margin: 0 auto;
-  padding: calc(var(--safe-top) + 14px) 16px var(--dock-clearance);
+  padding: calc(var(--safe-top) + 14px) 16px calc(var(--dock-clearance) + 8px);
   background-color: var(--bg-app);
 }
 
@@ -344,6 +398,15 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
+}
+.holiday-notice {
+  margin: 0 2px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 149, 0, 0.12);
+  color: #8a4b12;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 /* 2. 天气与校历双白分组盒 */

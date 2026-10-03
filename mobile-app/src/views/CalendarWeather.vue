@@ -22,11 +22,11 @@
     <div class="cw-status-bar">
       <span class="status-left">
         <Icon name="clock" :size="13" color="#8E8E93" />
-        <span>刚刚更新</span>
+        <span>{{ weatherSyncLabel }}</span>
       </span>
       <span class="term-pill-tag">
         <Icon name="schedule" :size="12" color="#007AFF" />
-        <span>{{ store.semesterText || '2026-2027 第一学期' }}</span>
+        <span>{{ store.semesterText || '学期未同步' }}</span>
       </span>
     </div>
 
@@ -98,7 +98,7 @@
     <section id="cw-calendar" class="cw-card semester-overview-card">
       <div class="card-head-line">
         <h2 class="card-head-title">学期总览</h2>
-        <span class="status-badge running">进行中</span>
+        <span class="status-badge" :class="termStatusClass">{{ termStatusLabel }}</span>
       </div>
 
       <div class="overview-info-grid">
@@ -108,7 +108,7 @@
           </div>
           <div class="info-cell-texts">
             <span class="c-lbl">学年</span>
-            <span class="c-val">2026-2027</span>
+            <span class="c-val">{{ termYearLabel }}</span>
           </div>
         </div>
         <div class="info-cell">
@@ -117,7 +117,7 @@
           </div>
           <div class="info-cell-texts">
             <span class="c-lbl">学期</span>
-            <span class="c-val">第一学期</span>
+            <span class="c-val">{{ termNameLabel }}</span>
           </div>
         </div>
         <div class="info-cell">
@@ -126,7 +126,7 @@
           </div>
           <div class="info-cell-texts">
             <span class="c-lbl">开始日期</span>
-            <span class="c-val">2026-09-07</span>
+            <span class="c-val">{{ termStartLabel }}</span>
           </div>
         </div>
         <div class="info-cell">
@@ -135,35 +135,37 @@
           </div>
           <div class="info-cell-texts">
             <span class="c-lbl">结束日期</span>
-            <span class="c-val">2027-01-17</span>
+            <span class="c-val">{{ termEndLabel }}</span>
           </div>
         </div>
       </div>
 
+      <p v-if="!termRange" class="term-unconfigured">学期起止尚未配置。同步课表后，这里才计算进度。</p>
+
       <!-- 进度条 -->
-      <div class="progress-block">
+      <div v-else class="progress-block">
         <div class="progress-label-row">
           <span>本学期进度</span>
-          <span class="p-pct">{{ termProgressPct }}%</span>
+          <span class="p-pct">{{ termRange.pct }}%</span>
         </div>
         <div class="progress-rail">
-          <div class="progress-bar-fill" :style="{ width: termProgressPct + '%' }"></div>
+          <div class="progress-bar-fill" :style="{ width: termRange.pct + '%' }"></div>
         </div>
       </div>
 
       <!-- 已过天数 / 剩余天数 / 总天数 -->
-      <div class="days-stat-row">
+      <div v-if="termRange" class="days-stat-row">
         <div class="days-stat-col">
           <span class="ds-lbl">已过天数</span>
-          <span class="ds-num">{{ passedDays }} <small>天</small></span>
+          <span class="ds-num">{{ termRange.passed }} <small>天</small></span>
         </div>
         <div class="days-stat-col highlight-col">
           <span class="ds-lbl">剩余天数</span>
-          <span class="ds-num highlight">{{ remainingDays }} <small>天</small></span>
+          <span class="ds-num highlight">{{ termRange.remaining }} <small>天</small></span>
         </div>
         <div class="days-stat-col">
           <span class="ds-lbl">总天数</span>
-          <span class="ds-num">{{ totalTermDays }} <small>天</small></span>
+          <span class="ds-num">{{ termRange.total }} <small>天</small></span>
         </div>
       </div>
     </section>
@@ -172,20 +174,20 @@
     <section class="cw-card timeline-milestone-card">
       <div class="card-head-line">
         <h2 class="card-head-title">学期时间轴</h2>
-        <span class="week-pill-badge">第 {{ store.currentWeek || 1 }} 周</span>
+        <span class="week-pill-badge">{{ teachingWeekLabel }}</span>
       </div>
 
       <div class="timeline-visual-bar">
         <div class="timeline-line"></div>
-        <div class="timeline-marker start" :class="{ reached: passedDays >= 0 }"></div>
-        <div class="timeline-marker now active" :style="{ left: termProgressPct + '%' }"></div>
+        <div class="timeline-marker start" :class="{ reached: !!termRange }"></div>
+        <div v-if="termRange" class="timeline-marker now active" :style="{ left: termRange.pct + '%' }"></div>
         <div class="timeline-marker end"></div>
       </div>
 
       <div class="timeline-nodes-labels">
         <div class="t-node">
           <span class="tn-title">开学</span>
-          <span class="tn-date">2026-09-07</span>
+          <span class="tn-date">{{ termStartLabel }}</span>
         </div>
         <div class="t-node center">
           <span class="tn-title">今天</span>
@@ -193,7 +195,7 @@
         </div>
         <div class="t-node right">
           <span class="tn-title">结课</span>
-          <span class="tn-date">2027-01-17</span>
+          <span class="tn-date">{{ termEndLabel }}</span>
         </div>
       </div>
     </section>
@@ -202,7 +204,7 @@
     <section class="cw-card academic-calendar-card">
       <div class="card-head-line">
         <h2 class="card-head-title">学期日历</h2>
-        <span class="total-weeks-badge">共 19 周</span>
+        <span class="total-weeks-badge">{{ totalWeeksLabel }}</span>
       </div>
 
       <p class="calendar-card-intro">
@@ -218,11 +220,11 @@
 
       <!-- Stats pill -->
       <div class="calendar-metrics-strip">
-        <div class="cm-item">当前周 <strong class="c-blue">第{{ store.currentWeek || 1 }}周</strong></div>
+        <div class="cm-item">当前周 <strong class="c-blue">{{ teachingWeekLabel }}</strong></div>
         <div class="cm-divider"></div>
-        <div class="cm-item">总周数 <strong class="c-purple">19周</strong></div>
+        <div class="cm-item">总周数 <strong class="c-purple">{{ totalWeeksShort }}</strong></div>
         <div class="cm-divider"></div>
-        <div class="cm-item">学期天数 <strong class="c-green">{{ totalTermDays }}天</strong></div>
+        <div class="cm-item">学期天数 <strong class="c-green">{{ totalDaysLabel }}</strong></div>
       </div>
 
       <!-- Month Switcher -->
@@ -289,6 +291,7 @@ import { showToast } from '@/utils/appToast'
 import Icon from '@/components/Icon.vue'
 import { useWidgetPage } from '@/composables/useWidgetPage'
 import { widgetExpand } from '@/composables/useWidgetExpand'
+import { calcWeekNumber } from '@/utils/scheduleModel.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -317,11 +320,27 @@ const currentTemp = computed(() => {
 })
 
 const weatherText = computed(() => {
-  return store.weather?.text || '晴'
+  const text = String(store.weather?.text || '').trim()
+  if (text) return text
+  return store.weatherLoading ? '同步中…' : '未同步'
+})
+
+const weatherSyncLabel = computed(() => {
+  if (store.weatherLoading) return '正在同步'
+  if (!String(store.weather?.text || '').trim()) return '尚未同步'
+  return '已同步天气'
+})
+
+const teachingWeekLabel = computed(() => {
+  const week = store.currentWeek
+  if (week == null || !Number.isFinite(week)) return '教学周待确认'
+  if (week < 1) return '尚未开学'
+  return '第 ' + week + ' 周'
 })
 
 function getWeatherIcon(text) {
   const s = String(text || '')
+  if (!s || s === '未同步' || s.includes('同步')) return 'weather-cloud'
   if (s.includes('雷')) return 'weather-thunder'
   if (s.includes('雨')) return 'weather-rain'
   if (s.includes('雪')) return 'weather-cloud'
@@ -363,7 +382,9 @@ const forecastDays = computed(() => {
       weekday: WEEKDAY_CN[d.getDay()],
       dateStr: (d.getMonth() + 1) + '/' + d.getDate(),
       dateLong: (d.getMonth() + 1) + '月' + d.getDate() + '日 · ' + WEEKDAY_CN[d.getDay()],
-      text: isToday ? (store.weather?.text || data.text || '晴') : (data.text || '晴'),
+      text: isToday
+        ? (String(store.weather?.text || data.text || '').trim() || (store.weatherLoading ? '同步中…' : '未同步'))
+        : (String(data.text || '').trim() || '未同步'),
       tmin: data.tmin,
       tmax: data.tmax,
       range: (data.tmin != null ? data.tmin + '°' : '--') + ' / ' + (data.tmax != null ? data.tmax + '°' : '--'),
@@ -390,10 +411,10 @@ const activeDay = computed(() => {
   if (day.isToday) {
     const dir = w.windDir ? w.windDir + '风 ' : ''
     return {
-      headline: (day.weekday || '今天') + ' · ' + (w.text || day.text || '晴'),
-      text: w.text || day.text || '晴',
+      headline: (day.weekday || '今天') + ' · ' + (w.text || day.text || weatherText.value),
+      text: w.text || day.text || weatherText.value,
       temp: w.temperature ?? day.tmax ?? '--',
-      aside: updateTimeStr.value + ' 更新',
+      aside: String(w.text || '').trim() ? (updateTimeStr.value + ' 更新') : (store.weatherLoading ? '正在同步' : '尚未同步'),
       metrics: [
         { icon: 'weather-thermometer', label: '体感温度', value: (Number.isFinite(w.apparent) ? w.apparent : (Number.isFinite(day.apparent) ? day.apparent : '--')) + '°C' },
         { icon: 'weather-drop', label: '湿度', value: (w.humidity != null ? w.humidity + '%' : '--') },
@@ -404,8 +425,8 @@ const activeDay = computed(() => {
   const rain = day.precipProb != null ? day.precipProb + '%' : (day.precipSum != null ? day.precipSum + ' mm' : '--')
   const sun = (day.sunrise || '--') + ' / ' + (day.sunset || '--')
   return {
-    headline: (day.dateLong || day.label) + ' · ' + (day.text || '晴'),
-    text: day.text || '晴',
+    headline: (day.dateLong || day.label) + ' · ' + (day.text || '未同步'),
+    text: day.text || '未同步',
     temp: day.tmax ?? '--',
     aside: '最高 ' + (day.tmax ?? '--') + '°  最低 ' + (day.tmin ?? '--') + '°',
     metrics: [
@@ -416,26 +437,78 @@ const activeDay = computed(() => {
   }
 })
 
-// Academic Term Stats (2026-09-07 ~ 2027-01-17 = 133 days)
-const termStart = new Date(2026, 8, 7) // 2026-09-07
-const termEnd = new Date(2027, 0, 17)   // 2027-01-17
-const totalTermDays = Math.round((termEnd - termStart) / (24 * 3600 * 1000)) + 1 // 133
+// 已核对的学期结课日。没有写进学期配置的开学日，不借用这段日期。
+const KNOWN_TERM = {
+  '2026-09-07': { end: '2027-01-17', year: '2026-2027', name: '第一学期' }
+}
 
-const passedDays = computed(() => {
+function localDate(iso) {
+  const match = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+}
+
+const termStartIso = computed(() => {
+  const calendar = store.calendar
+  const fromCalendar = calendar?.semesterStartKnown ? String(calendar.semesterStart || '').slice(0, 10) : ''
+  const fromStore = String(store.semesterStart || '').slice(0, 10)
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(fromCalendar) ? fromCalendar : fromStore
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : ''
+})
+
+const termRange = computed(() => {
+  const startIso = termStartIso.value
+  const endIso = KNOWN_TERM[startIso]?.end
+  const start = localDate(startIso)
+  const end = localDate(endIso)
+  if (!start || !end) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const diff = Math.round((today - termStart) / (24 * 3600 * 1000))
-  return Math.max(0, Math.min(diff, totalTermDays))
+  const total = Math.round((end - start) / (24 * 3600 * 1000)) + 1
+  if (total < 1) return null
+  const passedRaw = Math.round((today - start) / (24 * 3600 * 1000))
+  const passed = Math.max(0, Math.min(passedRaw, total))
+  const weeks = calcWeekNumber(endIso, startIso)
+  let status = '进行中'
+  if (passedRaw < 0) status = '尚未开学'
+  else if (passedRaw >= total) status = '已结束'
+  return {
+    startIso,
+    endIso,
+    total,
+    passed,
+    remaining: Math.max(0, total - passed),
+    pct: Math.round((passed / total) * 100),
+    weeks: Number.isFinite(weeks) && weeks >= 1 ? weeks : null,
+    status
+  }
 })
 
-const remainingDays = computed(() => {
-  return Math.max(0, totalTermDays - passedDays.value)
+const termStatusLabel = computed(() => termRange.value?.status || (termStartIso.value ? '结课日未配置' : '未配置'))
+const termStatusClass = computed(() => {
+  const status = termStatusLabel.value
+  if (status === '进行中') return 'running'
+  if (status === '尚未开学') return 'pending'
+  if (status === '已结束') return 'ended'
+  return 'unknown'
 })
-
-const termProgressPct = computed(() => {
-  const pct = Math.round((passedDays.value / totalTermDays) * 100)
-  return Math.max(1, Math.min(pct, 100))
+const termYearLabel = computed(() => {
+  const text = String(store.calendar?.semesterText || store.semesterText || '')
+  const match = text.match(/(\d{4}-\d{4})/)
+  if (match) return match[1]
+  return KNOWN_TERM[termStartIso.value]?.year || '未配置'
 })
+const termNameLabel = computed(() => {
+  const text = String(store.calendar?.semesterText || store.semesterText || '')
+  const match = text.match(/第[一二三四五六七八九十\d]+学期/)
+  if (match) return match[0]
+  return KNOWN_TERM[termStartIso.value]?.name || '未配置'
+})
+const termStartLabel = computed(() => termStartIso.value || '未配置')
+const termEndLabel = computed(() => termRange.value?.endIso || '未配置')
+const totalWeeksLabel = computed(() => termRange.value?.weeks ? `共 ${termRange.value.weeks} 周` : '周数待确认')
+const totalWeeksShort = computed(() => termRange.value?.weeks ? `${termRange.value.weeks}周` : '待确认')
+const totalDaysLabel = computed(() => termRange.value ? `${termRange.value.total}天` : '待确认')
 
 const todayFmt = computed(() => {
   const d = new Date()
@@ -508,6 +581,13 @@ const monthDaysCells = computed(() => {
     const dayOfWeek = (curDate.getDay() + 6) % 7
     const iso = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0')
     const ms = MILESTONES[iso]
+    const hits = calendarHits(iso)
+    const titles = []
+    if (ms?.title) titles.push(ms.title)
+    for (const event of hits) {
+      if (event.title && event.title !== ms?.title) titles.push(event.title)
+    }
+    const extraTag = hits.map(event => eventTag(event, iso)).find(Boolean) || ''
     cells.push({
       dayNum: d,
       currentMonth: true,
@@ -516,9 +596,9 @@ const monthDaysCells = computed(() => {
       isWeekend: dayOfWeek >= 5,
       isStart: ms?.type === 'start',
       isEnd: ms?.type === 'end',
-      isHoliday: ms?.type === 'holiday',
-      tag: ms?.tag || '',
-      title: ms?.title || ''
+      isHoliday: ms?.type === 'holiday' || hits.some(event => event.type === 'holiday' || event.type === 'vacation'),
+      tag: ms?.tag || extraTag,
+      title: titles.join('；')
     })
   }
 
@@ -535,13 +615,29 @@ const monthDaysCells = computed(() => {
   return cells
 })
 
+function calendarHits(iso) {
+  const events = Array.isArray(store.calendar?.events) ? store.calendar.events : []
+  return events.filter(event => {
+    const start = String(event?.date || '').slice(0, 10)
+    const end = String(event?.endDate || event?.date || '').slice(0, 10)
+    return !!start && iso >= start && iso <= end
+  })
+}
+
+function eventTag(event, iso) {
+  const start = String(event?.date || '').slice(0, 10)
+  if (!event?.title || (start && start !== iso)) return ''
+  return String(event.title).slice(0, 2)
+}
+
 function selectDayCell(cell) {
   if (!cell.currentMonth || !cell.iso) return
-  if (cell.title) {
-    selectedDayDetail.value = { date: cell.iso, title: cell.title }
-  } else {
-    selectedDayDetail.value = { date: cell.iso, title: '常规教学日' }
-  }
+  const week = store.semesterStart ? calcWeekNumber(cell.iso, store.semesterStart) : null
+  const weekText = week == null || !Number.isFinite(week)
+    ? '教学周待确认'
+    : (week < 1 ? '尚未开学' : '第' + week + '周')
+  const note = cell.title ? ('校历标注：' + cell.title) : '常规教学日'
+  selectedDayDetail.value = { date: cell.iso, title: weekText + ' · ' + note }
 }
 
 async function switchCampus(id) {
@@ -695,13 +791,30 @@ onMounted(async () => {
   color: #000000;
 }
 
-.status-badge.running {
-  background: rgba(52, 199, 89, 0.12);
-  color: #34C759;
+.status-badge {
   font-size: 12px;
   font-weight: 600;
   padding: 3px 8px;
   border-radius: 8px;
+}
+.status-badge.running {
+  background: rgba(52, 199, 89, 0.12);
+  color: #34C759;
+}
+.status-badge.pending {
+  background: rgba(255, 149, 0, 0.12);
+  color: #C93400;
+}
+.status-badge.ended,
+.status-badge.unknown {
+  background: rgba(142, 142, 147, 0.16);
+  color: #636366;
+}
+.term-unconfigured {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #636366;
 }
 
 .week-pill-badge,
@@ -756,7 +869,8 @@ onMounted(async () => {
   border-radius: 6px;
   cursor: pointer;
   color: rgba(60, 60, 67, 0.70);
-  min-height: 28px;
+  min-height: 44px;
+  min-width: 44px;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
@@ -1196,8 +1310,8 @@ onMounted(async () => {
 }
 
 .month-nav-btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 8px;
   border: 0.5px solid rgba(0, 0, 0, 0.08);
   background: #FFFFFF;

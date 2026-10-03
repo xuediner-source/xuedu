@@ -26,5 +26,5 @@ const label = computed(() => {
 <style scoped>
 .sync-status { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 6px 2px 12px; font-size: 12px; color: var(--text-secondary); }
 .sync-error { color: var(--danger); flex-basis: 100%; }
-.sync-status button { border: 0; background: var(--primary-light); color: var(--primary-deep); padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.sync-status button { border: 0; background: var(--primary-light); color: var(--primary-deep); min-height: 44px; padding: 0 12px; border-radius: 8px; cursor: pointer; }
 </style>
